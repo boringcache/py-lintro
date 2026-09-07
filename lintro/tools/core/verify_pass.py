@@ -30,7 +30,10 @@ When fingerprints are unavailable or unreliable — a stat that fails, or a
 filesystem with whole-second mtime granularity where a rewrite inside the same
 second is invisible — the pass degrades to **every file handed to a mutating
 capability**. That is the documented floor, not a separate implementation: the
-same verify pass runs, over a wider file set.
+same verify pass runs, over a wider file set. "Handed to" is literal: the
+candidate set is built per tool and carries the run's ``--incremental`` and
+``--diff`` scoping, so the floor can never re-check a file this run could not
+have touched.
 
 Residual accounting
 -------------------
@@ -79,6 +82,9 @@ if TYPE_CHECKING:
     from lintro.models.core.claim import Claim
 
 __all__ = [
+    "COARSE_MTIME_REASON",
+    "NARROWED_REASON",
+    "UNREADABLE_REASON",
     "VerifiableTool",
     "VerifyBaseline",
     "VerifyOutcome",
@@ -93,6 +99,12 @@ __all__ = [
 
 #: Reason recorded when fingerprints narrowed the scope successfully.
 NARROWED_REASON: str = ""
+
+#: Floor reason: the filesystem cannot distinguish a rewrite inside one second.
+COARSE_MTIME_REASON: str = "coarse mtime resolution"
+
+#: Floor reason: at least one candidate file could not be stat'ed.
+UNREADABLE_REASON: str = "some files could not be fingerprinted"
 
 
 class VerifiableTool(Protocol):
@@ -167,23 +179,28 @@ def resolve_result_capability(*, tool_name: str, action: Action) -> Cap | None:
     return None
 
 
-def _mutating_patterns(tool_names: Sequence[str]) -> list[str]:
-    """Collect the file patterns any selected tool may rewrite.
+def _mutating_patterns_by_tool(
+    tool_names: Sequence[str],
+) -> dict[str, list[str]]:
+    """Map each selected tool to the file patterns it may rewrite.
 
     Args:
         tool_names: Tools selected for the run.
 
     Returns:
-        Sorted, de-duplicated glob patterns from every mutating claim. A
-        project-scoped claim (no patterns) contributes nothing, because it is
-        not addressed by pattern.
+        Sorted, de-duplicated glob patterns per tool, omitting tools that
+        rewrite nothing addressed by pattern. A project-scoped claim (no
+        patterns) contributes nothing, because it is not addressed by pattern.
     """
-    patterns: set[str] = set()
+    by_tool: dict[str, list[str]] = {}
     for name in tool_names:
+        patterns: set[str] = set()
         for claim in _claims_for(name):
             if claim.is_mutating:
                 patterns.update(claim.patterns)
-    return sorted(patterns)
+        if patterns:
+            by_tool[name] = sorted(patterns)
+    return by_tool
 
 
 def verifying_tools(tool_names: Sequence[str]) -> list[str]:
@@ -232,8 +249,10 @@ class VerifyScope:
             pass fell back to the documented floor.
         floor_reason: Why the floor was used, empty when ``narrowed``.
         targets: What to hand the verifying tools instead of ``files``. Set
-            only on the floor, where the run's original scan paths cover the
-            same set far more cheaply than thousands of file arguments.
+            only on the floor of an unnarrowed run, where the run's original
+            scan paths cover the same set far more cheaply than thousands of
+            file arguments. Empty under ``--incremental`` or ``--diff``, where
+            the scan paths cover strictly more than the candidates do.
     """
 
     files: tuple[str, ...]
@@ -246,10 +265,12 @@ class VerifyScope:
         """Return what to hand the verifying tools as their scan targets.
 
         A narrowed scope hands over the changed files themselves. The floor
-        hands over the run's original paths instead of thousands of individual
-        file arguments: the set is the same, and letting each tool do its own
-        discovery keeps the fallback from being pathologically slower than the
-        run it is verifying.
+        of an unnarrowed run hands over the run's original paths instead of
+        thousands of individual file arguments: the set is the same, and
+        letting each tool do its own discovery keeps the fallback from being
+        pathologically slower than the run it is verifying. Under
+        ``--incremental`` or ``--diff`` that equivalence does not hold, so the
+        floor names the candidate files.
 
         Returns:
             Scan targets for ``tool.check``.
@@ -278,7 +299,9 @@ class VerifyBaseline:
             the documented floor the pass degrades to.
         snapshot: Fingerprints of those files as of just before mutation.
         scan_paths: The run's original scan targets, handed to the verifying
-            tools when the pass falls back to the floor.
+            tools when the pass falls back to the floor. Empty when the run
+            was narrowed by ``--incremental`` or ``--diff``, because the scan
+            paths then cover more than the candidates do.
     """
 
     candidates: tuple[str, ...]
@@ -288,28 +311,60 @@ class VerifyBaseline:
     scan_paths: tuple[str, ...] = ()
 
 
+def _incremental_subset(*, tool_name: str, files: Sequence[str]) -> list[str]:
+    """Restrict a tool's file set to what its incremental cache calls changed.
+
+    Deliberately not ``walk_files_with_excludes(incremental=True)``: that call
+    *writes* the tool's cache as a side effect, and this runs before the
+    mutation phase, so it would tell every tool its own files were already
+    up to date. Reading the cache is enough.
+
+    Args:
+        tool_name: Registry key whose cache to consult.
+        files: Files the tool would otherwise be handed.
+
+    Returns:
+        The subset the tool's cache reports as changed since its last run.
+    """
+    from lintro.utils.file_cache import ToolCache
+
+    return ToolCache.load(tool_name).get_changed_files(list(files))
+
+
 def capture_verify_baseline(
     *,
     tools_to_run: Sequence[str],
     paths: Sequence[str],
     exclude: str | None,
     include_venv: bool,
+    incremental: bool = False,
+    diff_base: str | None = None,
 ) -> VerifyBaseline:
     """Fingerprint every file the mutation phase could rewrite.
+
+    The candidate set is built per tool and unioned, not from one walk over
+    the union of every mutating pattern. That difference only shows up under
+    ``--incremental``, where each tool has its own idea of what changed, but
+    getting it wrong would let the floor re-check files this run could never
+    have touched and report their diagnostics as its residual.
 
     Args:
         tools_to_run: Tools selected for the run.
         paths: Scan targets given to the run.
         exclude: Comma-separated CLI exclude patterns, or ``None``.
         include_venv: Whether virtual-environment directories are in scope.
+        incremental: Whether the run only scans files changed since the tool's
+            last run. Applied per tool, from its own cache.
+        diff_base: Resolved ``--diff`` base ref, or ``None``. Restricts the
+            candidates the same way the mutation phase was restricted.
 
     Returns:
         VerifyBaseline: The floor file set and its pre-mutation fingerprints.
         Empty when no selected tool declares a pattern-addressed mutating
         claim, which makes the verify pass a no-op.
     """
-    patterns = _mutating_patterns(tools_to_run)
-    if not patterns:
+    patterns_by_tool = _mutating_patterns_by_tool(tools_to_run)
+    if not patterns_by_tool:
         return VerifyBaseline(candidates=())
 
     # Resolve excludes the way a plugin's own discovery does — CLI patterns
@@ -319,16 +374,28 @@ def capture_verify_baseline(
     exclude_patterns = setup_exclude_patterns(
         [p.strip() for p in (exclude or "").split(",") if p.strip()],
     )
-    candidates = walk_files_with_excludes(
-        paths=list(paths),
-        file_patterns=patterns,
-        exclude_patterns=exclude_patterns,
-        include_venv=include_venv,
-    )
+    candidates: set[str] = set()
+    for tool_name, patterns in patterns_by_tool.items():
+        files = walk_files_with_excludes(
+            paths=list(paths),
+            file_patterns=patterns,
+            exclude_patterns=exclude_patterns,
+            include_venv=include_venv,
+            diff_base=diff_base,
+        )
+        if incremental:
+            files = _incremental_subset(tool_name=tool_name, files=files)
+        candidates.update(files)
+
+    ordered = tuple(sorted(candidates))
     return VerifyBaseline(
-        candidates=tuple(candidates),
-        snapshot=snapshot_fingerprints(candidates),
-        scan_paths=tuple(paths),
+        candidates=ordered,
+        snapshot=snapshot_fingerprints(ordered),
+        # Handing the tools the original scan paths is a cheap shortcut that
+        # only holds when the candidate set *is* everything under them. Once
+        # the run is narrowed by --incremental or --diff it is not, so the
+        # floor must name the files instead of re-widening to the tree.
+        scan_paths=() if (incremental or diff_base) else tuple(paths),
     )
 
 
@@ -348,14 +415,14 @@ def resolve_verify_scope(baseline: VerifyBaseline) -> VerifyScope:
         return VerifyScope(
             files=baseline.candidates,
             narrowed=False,
-            floor_reason="coarse mtime resolution",
+            floor_reason=COARSE_MTIME_REASON,
             targets=baseline.scan_paths,
         )
     if len(baseline.snapshot.fingerprints) != len(baseline.candidates):
         return VerifyScope(
             files=baseline.candidates,
             narrowed=False,
-            floor_reason="some files could not be fingerprinted",
+            floor_reason=UNREADABLE_REASON,
             targets=baseline.scan_paths,
         )
     return VerifyScope(
@@ -423,6 +490,10 @@ def run_verify_pass(
 
     Returns:
         list[VerifyOutcome]: One outcome per verifying tool.
+
+    Raises:
+        TypeError: If a programming error occurs while a check runs.
+        AttributeError: If a programming error occurs while a check runs.
     """
     outcomes: list[VerifyOutcome] = []
     files = list(scope.scan_targets)
@@ -436,7 +507,13 @@ def run_verify_pass(
         try:
             tool = configure(tool_name=name)
             result = tool.check(files, {})
-        except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
+        except (TypeError, AttributeError):
+            # Programming errors propagate, exactly as they do out of the
+            # mutation phase. Swallowing them here would make a bug in the
+            # verify path indistinguishable from a tool that genuinely could
+            # not run.
+            raise
+        except (KeyError, OSError, RuntimeError, ValueError):
             logger.opt(exception=True).debug(f"Verify pass failed for {name}")
             outcomes.append(VerifyOutcome(tool=name, result=None, ran=False))
             continue

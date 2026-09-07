@@ -262,6 +262,7 @@ class ClippyPlugin(BaseToolPlugin):
                 initial_issues=[],
                 cmd=check_cmd,
                 tool_name="clippy",
+                cwd=str(cargo_root),
             )
 
         initial_issues = parse_clippy_output(output=output_check)
@@ -284,6 +285,7 @@ class ClippyPlugin(BaseToolPlugin):
                 initial_issues=initial_issues,
                 cmd=fix_cmd,
                 tool_name="clippy",
+                cwd=str(cargo_root),
             )
 
         # Re-check after fix to count remaining issues
@@ -302,6 +304,7 @@ class ClippyPlugin(BaseToolPlugin):
                 initial_issues=initial_issues,
                 cmd=check_cmd,
                 tool_name="clippy",
+                cwd=str(cargo_root),
             )
 
         remaining_issues = parse_clippy_output(output=output_after)
@@ -322,4 +325,9 @@ class ClippyPlugin(BaseToolPlugin):
             fixed_issues_count=fixed_count,
             remaining_issues_count=remaining_count,
             initial_issues=initial_issues if initial_issues else None,
+            # clippy runs from the crate root, and its parser can report paths
+            # relative to it. The run-level verify pass (#1743) resolves each
+            # issue's file against this directory to decide whether the file
+            # was rewritten, so dropping it would overstate the residual.
+            cwd=str(cargo_root),
         )

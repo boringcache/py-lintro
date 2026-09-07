@@ -369,7 +369,7 @@ class TaploPlugin(BaseToolPlugin):
 
         logger.debug(f"[TaploPlugin] Fixing: {' '.join(fix_cmd)} (cwd={ctx.cwd})")
         try:
-            _, _ = self._run_subprocess(
+            fix_success, fix_output = self._run_subprocess(
                 cmd=fix_cmd,
                 timeout=ctx.timeout,
                 cwd=ctx.cwd,
@@ -386,7 +386,25 @@ class TaploPlugin(BaseToolPlugin):
         # the three other private implementations of the same idea) with the
         # run-level verify pass, which is the only place that can also see a
         # later tool undoing this one's work. What this method still owns is
-        # the pre-fix measurement the verify pass subtracts from.
+        # the pre-fix measurement the verify pass subtracts from — and the exit
+        # status of the mutation command itself, which no verify pass can
+        # recover: a `taplo fmt` that could not write reports nothing to find
+        # afterwards, so a dropped failure would read as a clean run.
+        if not fix_success:
+            failure_output = (fix_output or "").strip()
+            return ToolResult(
+                name=self.definition.name,
+                success=False,
+                output=f"taplo fmt failed.\n{failure_output}".strip(),
+                issues_count=initial_count,
+                issues=list(initial_issues),
+                initial_issues=initial_issues if initial_issues else None,
+                initial_issues_count=initial_count,
+                fixed_issues_count=0,
+                remaining_issues_count=initial_count,
+                cwd=ctx.cwd,
+            )
+
         fixed_count = initial_count
         final_summary = (
             f"Fixed {fixed_count} issue(s)" if fixed_count else "No fixes applied."

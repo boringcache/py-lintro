@@ -97,12 +97,13 @@ class ToolResult:
     # directly in a test).
     duration_seconds: float | None = field(default=None)
 
-    # Which capability produced this result. A result's identity is
-    # ``(name, capability)``: in a ``fmt`` run a tool contributes a mutation
-    # result (``FIX``/``FORMAT``) and, once the verify pass has folded into
-    # it, the authoritative ``CHECK`` residual. ``None`` on results that were
-    # not produced by a capability at all (skipped tools, run-level gates,
-    # results built directly in a test).
+    # Which capability produced this result: ``CHECK`` outside a fix run, and
+    # the tool's mutating capability (``FIX``/``FORMAT``) inside one. It keeps
+    # that value after the verify pass folds its ``CHECK`` residual into the
+    # same row (#1743) — display rolls up to the tool, so the row stays the
+    # mutation's and the field names what produced it. ``None`` on results not
+    # produced by a capability at all (skipped tools, run-level gates, results
+    # built directly in a test).
     capability: Cap | None = field(default=None)
 
     def __post_init__(self) -> None:
