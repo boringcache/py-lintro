@@ -64,6 +64,8 @@ from lintro.utils.unified_config import UnifiedConfigManager
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from lintro.plugins.base import BaseToolPlugin
+
 # Re-export constants and internals for backwards compatibility. The private
 # names stay importable from here because they were part of this module before
 # the execute/render split (issue #1823).
@@ -418,14 +420,14 @@ def _run_verify_phase(
 
     scope = resolve_verify_scope(baseline)
 
-    def _configure_for_verify(*, tool_name: str) -> Any:
+    def _configure_for_verify(*, tool_name: str) -> BaseToolPlugin:
         """Build the check-mode plugin copy the verify pass executes.
 
         Args:
             tool_name: Registry key of the tool to configure.
 
         Returns:
-            The configured per-invocation plugin copy.
+            BaseToolPlugin: The configured per-invocation plugin copy.
         """
         return configure_tool_for_execution(
             tool=tool_manager.get_tool(tool_name),
