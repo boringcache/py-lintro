@@ -1024,6 +1024,7 @@ wider set. The run reports which it used:
 ```text
 Verify pass: re-checking 12 changed file(s)
 Verify pass: re-checking 340 file(s) (coarse mtime resolution)
+Verify pass: re-checking 340 file(s) (some files could not be fingerprinted)
 ```
 
 **`lintro check` is unaffected** and stays read-only: it takes no snapshot and runs no

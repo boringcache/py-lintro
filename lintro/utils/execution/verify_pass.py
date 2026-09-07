@@ -455,9 +455,13 @@ def _fold_one(
     mutation.fixed_issues_count = fixed
     mutation.remaining_issues_count = residual
     mutation.output = output
-    if verify is None:
-        mutation.success = mutation.success and outcome.ran and residual == 0
-    else:
+    # ``success`` follows the authoritative residual, not the fix pass's
+    # opinion of itself: a leftover on a file the pass did not need to verify
+    # is still a leftover. The mutation phase's own flag is still ANDed in so
+    # an execution failure that produced no issues stays a failure, and so is
+    # the verify's, so a broken check cannot read as clean.
+    mutation.success = mutation.success and outcome.ran and residual == 0
+    if verify is not None:
         mutation.success = mutation.success and verify.success
         if verify.duration_seconds is not None:
             mutation.duration_seconds = (

@@ -319,8 +319,9 @@ def test_run_verify_pass_runs_check_once_per_verifying_tool(
     )
 
     assert_that([o.tool for o in outcomes]).is_equal_to(["ruff"])
-    assert_that(outcomes[0].result).is_not_none()
-    assert_that(outcomes[0].result.capability).is_equal_to(Cap.CHECK)
+    verified = outcomes[0].result
+    assert_that(verified).is_not_none()
+    assert_that(verified.capability if verified else None).is_equal_to(Cap.CHECK)
     assert_that(ruff.seen_files).is_equal_to(["/a.py"])
     assert_that(prettier.seen_files).is_none()
 
@@ -458,6 +459,9 @@ def test_fold_keeps_pre_fix_issues_for_files_the_pass_did_not_verify() -> None:
         ["/repo/untouched.py"],
     )
     assert_that(folded.fixed_issues_count).is_equal_to(1)
+    # The fix pass called itself a success; a leftover it never re-checked is
+    # still a leftover.
+    assert_that(folded.success).is_false()
 
 
 def test_fold_leaves_a_tool_without_a_verify_result_alone() -> None:
