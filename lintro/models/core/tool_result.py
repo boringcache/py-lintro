@@ -11,6 +11,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from lintro.enums.capability import Cap
+
 if TYPE_CHECKING:
     from lintro.parsers.base_issue import BaseIssue
 
@@ -94,6 +96,14 @@ class ToolResult:
     # produced by a run (skipped tools, post-checks, or a result built
     # directly in a test).
     duration_seconds: float | None = field(default=None)
+
+    # Which capability produced this result. A result's identity is
+    # ``(name, capability)``: in a ``fmt`` run a tool contributes a mutation
+    # result (``FIX``/``FORMAT``) and, once the verify pass has folded into
+    # it, the authoritative ``CHECK`` residual. ``None`` on results that were
+    # not produced by a capability at all (skipped tools, run-level gates,
+    # results built directly in a test).
+    capability: Cap | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate that the issue counts and skip state are consistent.

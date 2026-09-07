@@ -50,16 +50,17 @@ class VerifyMode(StrEnum):
 
     Attributes:
         NEVER: Trust the fix command's exit status. A successful fix means
-            every issue detected before it ran was resolved.
+            every issue detected before it ran was resolved. Since #1743 this
+            is the right default for a tool lintro runs through ``fmt``: the
+            run-level verify pass measures the residual once, after every
+            mutating tool has finished, and a per-file re-lint here could only
+            repeat that measurement too early.
         AFTER_SUCCESS: Re-run the check command only when the fix command
             succeeded; a failed fix reports every initial issue as remaining.
-        ALWAYS: Re-run the check command even when the fix command failed,
-            because the tool can apply fixes partially while exiting non-zero.
     """
 
     NEVER = auto()
     AFTER_SUCCESS = auto()
-    ALWAYS = auto()
 
 
 @dataclass(frozen=True)
@@ -351,7 +352,7 @@ def _fix_one_file(
             error=str(exc),
         )
 
-    if not fix_success and policy.verify is not VerifyMode.ALWAYS:
+    if not fix_success:
         return _failed_fix(initial_issues=initial_issues, output=fix_output)
 
     if policy.verify is VerifyMode.NEVER:
