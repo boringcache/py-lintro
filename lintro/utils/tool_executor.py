@@ -450,14 +450,14 @@ def _run_verify_phase(
             color="cyan",
         )
 
-    verify_results = run_verify_pass(
+    verify_outcomes = run_verify_pass(
         tools_to_run=tools_to_run,
         scope=scope,
         configure=_configure_for_verify,
     )
     fold_verify_results(
         mutation_results=all_results,
-        verify_results=verify_results,
+        verify_results=verify_outcomes,
         scope=scope,
     )
 

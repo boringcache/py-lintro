@@ -68,6 +68,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "VerifyBaseline",
+    "VerifyOutcome",
     "VerifyScope",
     "capture_verify_baseline",
     "fold_verify_results",
@@ -160,6 +161,24 @@ def verifying_tools(tool_names: Sequence[str]) -> list[str]:
 
 
 @dataclass(frozen=True)
+class VerifyOutcome:
+    """What the verify pass could say about one tool.
+
+    Attributes:
+        tool: The verifying tool's registry name.
+        result: Its ``CHECK`` result, or ``None`` when no check was run —
+            either because nothing was rewritten or because the check raised.
+        ran: False only when the check raised. A ``None`` result with
+            ``ran=True`` means "nothing needed verifying", which is a clean
+            answer; ``ran=False`` means "we could not tell", which fails.
+    """
+
+    tool: str
+    result: ToolResult | None
+    ran: bool = True
+
+
+@dataclass(frozen=True)
 class VerifyScope:
     """The file set the verify pass will run over, and how it was chosen.
 
@@ -198,8 +217,8 @@ class VerifyScope:
         """Describe the scope in one console-ready clause.
 
         Returns:
-            A string such as ``"12 changed file(s)"`` or ``"340 file(s) (no
-            usable fingerprints: coarse mtime resolution)"``.
+            A string such as ``"12 changed file(s)"`` or ``"340 file(s)
+            (coarse mtime resolution)"``.
         """
         if self.narrowed:
             return f"{len(self.files)} changed file(s)"
@@ -340,8 +359,16 @@ def run_verify_pass(
     tools_to_run: Sequence[str],
     scope: VerifyScope,
     configure: Callable[..., BaseToolPlugin],
-) -> list[ToolResult]:
+) -> list[VerifyOutcome]:
     """Run the ``CHECK`` capability of every verifying tool over the scope.
+
+    Every verifying tool gets an outcome, including one whose ``CHECK`` never
+    ran. That matters because a mutating tool now reports ``remaining=0`` after
+    a clean fix: treating "no verify row" as "trust that zero" would let a run
+    with unfixable issues exit 0. An outcome that did not run carries no
+    verified files, so the fold falls back to the tool's pre-fix findings for
+    *every* file — the same answer the mutation phase would have given before
+    this pipeline existed.
 
     Args:
         tools_to_run: Tools selected for the run, in execution order.
@@ -351,40 +378,41 @@ def run_verify_pass(
             this module stays free of configuration concerns.
 
     Returns:
-        list[ToolResult]: One ``CHECK`` result per verifying tool. A tool
-        whose verification raises is omitted, so a broken verify degrades to
-        the mutation phase's own numbers rather than erasing them.
+        list[VerifyOutcome]: One outcome per verifying tool.
     """
-    if not scope.files:
-        return []
-
-    results: list[ToolResult] = []
+    outcomes: list[VerifyOutcome] = []
     files = list(scope.scan_targets)
     for name in verifying_tools(tools_to_run):
+        if not scope.files:
+            # Nothing was rewritten, so nothing needs re-checking. The tool's
+            # pre-fix findings are still its post-fix findings.
+            outcomes.append(VerifyOutcome(tool=name, result=None, ran=True))
+            continue
         started = time.monotonic()
         try:
             tool = configure(tool_name=name)
             result = tool.check(files, {})
         except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
             logger.opt(exception=True).debug(f"Verify pass failed for {name}")
+            outcomes.append(VerifyOutcome(tool=name, result=None, ran=False))
             continue
         result.capability = Cap.CHECK
         result.duration_seconds = time.monotonic() - started
-        results.append(result)
-    return results
+        outcomes.append(VerifyOutcome(tool=name, result=result, ran=True))
+    return outcomes
 
 
 def _fold_one(
     *,
     mutation: ToolResult,
-    verify: ToolResult,
+    outcome: VerifyOutcome,
     scope: VerifyScope,
 ) -> ToolResult:
     """Replace a mutation result's residual with the authoritative one.
 
     Args:
         mutation: The tool's mutation-phase result.
-        verify: The tool's verify-pass result.
+        outcome: The tool's verify-pass outcome.
         scope: The file set the verify pass covered.
 
     Returns:
@@ -392,13 +420,17 @@ def _fold_one(
         fixed count, and a note when the two disagreed. The pre-fix issue list
         is preserved so the "detected / remaining" view still renders.
     """
-    verified_paths = set(scope.files)
+    verify = outcome.result
+    # A verify that could not run has verified nothing, so every pre-fix issue
+    # is carried and the run reports a failure rather than a silent zero.
+    verified_paths = set(scope.files) if verify is not None else set()
     survivors: list[BaseIssue] = [
         issue
         for issue in _pre_fix_issues(mutation)
         if _issue_path(issue, cwd=mutation.cwd) not in verified_paths
     ]
-    survivors.extend(list(verify.issues) if verify.issues else [])
+    if verify is not None and verify.issues:
+        survivors.extend(list(verify.issues))
 
     residual = len(survivors)
     initial = mutation.initial_issues_count
@@ -423,21 +455,24 @@ def _fold_one(
     mutation.fixed_issues_count = fixed
     mutation.remaining_issues_count = residual
     mutation.output = output
-    mutation.success = mutation.success and verify.success
-    if verify.duration_seconds is not None:
-        mutation.duration_seconds = (
-            mutation.duration_seconds or 0.0
-        ) + verify.duration_seconds
+    if verify is None:
+        mutation.success = mutation.success and outcome.ran and residual == 0
+    else:
+        mutation.success = mutation.success and verify.success
+        if verify.duration_seconds is not None:
+            mutation.duration_seconds = (
+                mutation.duration_seconds or 0.0
+            ) + verify.duration_seconds
     return mutation
 
 
 def fold_verify_results(
     *,
     mutation_results: list[ToolResult],
-    verify_results: Sequence[ToolResult],
+    verify_results: Sequence[VerifyOutcome],
     scope: VerifyScope,
 ) -> None:
-    """Fold each verify result into its tool's mutation result, in place.
+    """Fold each verify outcome into its tool's mutation result, in place.
 
     Display rolls up to the tool, so the run keeps exactly one result per
     tool: the mutation result carries what was fixed and, after this fold, the
@@ -445,20 +480,23 @@ def fold_verify_results(
     output formatter, SARIF writer and AI summary responsible for a grouping
     rule for no user-visible gain.
 
+    A tool with no outcome at all declares no ``CHECK`` capability (prettier is
+    ``FORMAT``-only) and keeps its own numbers.
+
     Args:
         mutation_results: Results from the mutation phase, mutated in place.
-        verify_results: Results from the verify pass.
+        verify_results: Outcomes from the verify pass.
         scope: The file set the verify pass covered.
     """
-    by_name = {r.name: r for r in verify_results}
+    by_name = {outcome.tool: outcome for outcome in verify_results}
     for index, mutation in enumerate(mutation_results):
         if mutation.skipped or mutation.timed_out:
             continue
-        verify = by_name.get(mutation.name)
-        if verify is None:
+        outcome = by_name.get(mutation.name)
+        if outcome is None:
             continue
         mutation_results[index] = _fold_one(
             mutation=mutation,
-            verify=verify,
+            outcome=outcome,
             scope=scope,
         )
