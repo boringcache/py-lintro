@@ -987,6 +987,51 @@ mutating capabilities wins) and ruff is demoted to its fix capability: when blac
 the run, ruff's `format` / `format_check` stages are switched off unless you ask for
 them explicitly through `--tool-options` or `[tool.lintro.ruff]`.
 
+### Mutate-then-verify (`lintro format`)
+
+Since #1743 `lintro format` runs in two phases:
+
+1. **Mutation.** Every mutating capability (`FIX`, `FORMAT`) runs in derived DAG order.
+2. **Verify.** One pass runs the `CHECK` capability of the same tools. This single pass
+   is the run's authoritative residual count.
+
+A tool's own post-fix opinion is no longer the residual — it is replaced, not added, so
+no issue is counted twice. `fixed` is derived as "issues before the mutation phase minus
+the residual the verify pass measured", which is why a tool can now report fewer fixes
+than it thought it made.
+
+This is the only place cross-tool interference is visible. If ruff fixes a file and
+prettier then reformats it, ruff's own post-fix lint already ran; a run-level pass sees
+the result of every mutating tool.
+
+**Scope.** Verifying every file again would double the cost of a format run, so the pass
+is narrowed by fingerprint (mtime + size, from `lintro/utils/file_cache.py`): every file
+a mutating capability could be handed is stat'ed before the mutation phase and
+re-stat'ed after, and only the files whose fingerprint moved are verified. A file nobody
+rewrote keeps the issues it had before the run, so narrowing never loses a residual.
+
+mtime over-approximates: a formatter rewriting a file to byte-identical content still
+bumps mtime, so a file may be re-verified needlessly. That is a wasted check, not a
+wrong answer. Size alone is near-useless (a quote-style rewrite is the same length) and
+serves only as a cheap tiebreak.
+
+**The floor.** When fingerprints cannot be trusted — a `stat` that fails, or a
+filesystem with whole-second mtime granularity, where a rewrite inside the same second
+is invisible — the pass falls back to **every file handed to a mutating capability**.
+That is the documented floor, not a separate code path: the same verify pass runs over a
+wider set. The run reports which it used:
+
+```text
+Verify pass: re-checking 12 changed file(s)
+Verify pass: re-checking 340 file(s) (coarse mtime resolution)
+```
+
+**`lintro check` is unaffected** and stays read-only: it takes no snapshot and runs no
+verify pass. So does `lintro format --dry-run`, which is a check-mode preview.
+
+Tools that declare no `CHECK` capability (prettier is `FORMAT`-only) have no residual to
+report and are not asked for one; they keep their own counts.
+
 ### Ruff vs Black Policy (Python)
 
 Lintro enforces Ruff-first linting and Black-first formatting when Black is configured

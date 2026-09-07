@@ -49,6 +49,14 @@ from lintro.utils.execution.tool_configuration import (
     get_tool_display_name,
     get_tools_to_run,
 )
+from lintro.utils.execution.verify_pass import (
+    VerifyBaseline,
+    capture_verify_baseline,
+    fold_verify_results,
+    resolve_result_capability,
+    resolve_verify_scope,
+    run_verify_pass,
+)
 from lintro.utils.gates import execute_gates
 from lintro.utils.output import OutputManager
 from lintro.utils.unified_config import UnifiedConfigManager
@@ -368,6 +376,92 @@ def _execute_tools_sequential(
     return all_results
 
 
+def _run_verify_phase(
+    *,
+    ctx: RunContext,
+    baseline: VerifyBaseline,
+    tools_to_run: list[str],
+    all_results: list[ToolResult],
+    config_manager: UnifiedConfigManager,
+    tool_option_dict: dict[str, Any],
+    exclude: str | None,
+    include_venv: bool,
+    effective_auto_install: bool,
+    diff_base: str | None,
+) -> None:
+    """Run the single verify pass and fold its residual into the run.
+
+    This is the verify half of the mutate-then-verify pipeline (#1743). The
+    ``CHECK`` capability of every selected tool that has one runs exactly once,
+    after every mutating capability has finished, over the files whose
+    fingerprint moved. Its findings replace the residual each mutating tool
+    reported for itself, so a residual is counted once and cross-tool
+    interference is visible.
+
+    Does nothing outside a ``fmt`` run, or when no selected tool declares a
+    pattern-addressed mutating claim.
+
+    Args:
+        ctx: Shared run context.
+        baseline: Fingerprints captured before the mutation phase.
+        tools_to_run: Tools selected for the run, in execution order.
+        all_results: Mutation-phase results, folded in place.
+        config_manager: Shared unified configuration manager.
+        tool_option_dict: Parsed ``--tool-options`` mapping.
+        exclude: Exclude patterns.
+        include_venv: Whether to include virtual environment directories.
+        effective_auto_install: Resolved auto-install setting.
+        diff_base: Resolved ``--diff`` base ref, or ``None``.
+    """
+    if not baseline.candidates:
+        return
+
+    scope = resolve_verify_scope(baseline)
+
+    def _configure_for_verify(*, tool_name: str) -> Any:
+        """Build the check-mode plugin copy the verify pass executes.
+
+        Args:
+            tool_name: Registry key of the tool to configure.
+
+        Returns:
+            The configured per-invocation plugin copy.
+        """
+        return configure_tool_for_execution(
+            tool=tool_manager.get_tool(tool_name),
+            tool_name=tool_name,
+            config_manager=config_manager,
+            tool_option_dict=tool_option_dict,
+            exclude=exclude,
+            include_venv=include_venv,
+            # The verify pass does its own narrowing; layering the incremental
+            # cache on top would make the residual depend on a previous run.
+            incremental=False,
+            action=Action.CHECK,
+            selected_tools=set(tools_to_run),
+            auto_install=effective_auto_install,
+            lintro_config=ctx.lintro_config,
+            diff_base=diff_base,
+        )
+
+    if not ctx.clean_stdout_output:
+        ctx.logger.console_output(
+            text=f"Verify pass: re-checking {scope.summary}",
+            color="cyan",
+        )
+
+    verify_results = run_verify_pass(
+        tools_to_run=tools_to_run,
+        scope=scope,
+        configure=_configure_for_verify,
+    )
+    fold_verify_results(
+        mutation_results=all_results,
+        verify_results=verify_results,
+        scope=scope,
+    )
+
+
 def execute_run(
     *,
     ctx: RunContext,
@@ -559,6 +653,19 @@ def execute_run(
                 early_exit=True,
             )
 
+    # Mutate-then-verify (#1743). Fingerprint every file a mutating capability
+    # could rewrite *before* the mutation phase, so the verify pass that
+    # follows can be narrowed to the files that actually moved. ``chk`` and
+    # the ``fmt --dry-run`` preview stay read-only and take no snapshot.
+    verify_baseline = VerifyBaseline(candidates=())
+    if ctx.action == Action.FIX and not ctx.dry_run_preview:
+        verify_baseline = capture_verify_baseline(
+            tools_to_run=tools_to_run,
+            paths=paths,
+            exclude=exclude,
+            include_venv=include_venv,
+        )
+
     execute_tools = (
         _execute_tools_parallel if use_parallel else _execute_tools_sequential
     )
@@ -575,6 +682,26 @@ def execute_run(
         effective_auto_install=effective_auto_install,
         diff_base=resolved_diff_base,
         on_tool_result=on_tool_result,
+    )
+
+    for result in all_results:
+        if result.capability is None and not result.skipped:
+            result.capability = resolve_result_capability(
+                tool_name=result.name,
+                action=ctx.action,
+            )
+
+    _run_verify_phase(
+        ctx=ctx,
+        baseline=verify_baseline,
+        tools_to_run=tools_to_run,
+        all_results=all_results,
+        config_manager=config_manager,
+        tool_option_dict=tool_option_dict,
+        exclude=exclude,
+        include_venv=include_venv,
+        effective_auto_install=effective_auto_install,
+        diff_base=resolved_diff_base,
     )
 
     if use_parallel:

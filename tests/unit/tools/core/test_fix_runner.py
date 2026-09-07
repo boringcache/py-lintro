@@ -2,7 +2,7 @@
 
 The runner's happy paths are exercised by the per-tool suites; these tests
 cover the execution-failure and verification branches that a tool's own tests
-do not reach, using the three definitions that drive the three verify modes.
+do not reach, using the definitions that drive each verify mode.
 """
 
 from __future__ import annotations
@@ -183,21 +183,21 @@ def test_verification_failure_conservatively_keeps_the_initial_issues(
     """A broken verification run must not be read as "everything was fixed".
 
     Args:
-        tmp_path: Temporary directory for the SQL file.
+        tmp_path: Temporary directory for the dotenv file.
     """
-    query = tmp_path / "query.sql"
-    query.write_text("select 1\n")
-    plugin = SqlfluffPlugin()
+    env_file = tmp_path / ".env"
+    env_file.write_text("foo=1\n")
+    plugin = DotenvLinterPlugin()
     with patch.object(
         plugin,
         "_run_subprocess",
         side_effect=[
-            (False, _sqlfluff_violations(1)),
-            (True, "Fixed 1 file(s)"),
-            (False, "not valid json"),
+            (False, DOTENV_FINDING),
+            (True, ""),
+            (False, "dotenv-linter: cannot read"),
         ],
     ):
-        result = plugin.fix([str(query)], {})
+        result = plugin.fix([str(env_file)], {})
 
     assert_that(result.success).is_false()
     assert_that(result.initial_issues_count).is_equal_to(1)
@@ -233,8 +233,14 @@ def test_verification_after_a_successful_fix_scores_the_survivors(
     assert_that(result.remaining_issues_count).is_equal_to(0)
 
 
-def test_partial_fix_scores_only_the_issues_that_disappeared(tmp_path: Path) -> None:
-    """VerifyMode.ALWAYS counts survivors from a fresh lint, not the exit status.
+def test_a_failed_fix_command_reports_every_initial_issue_as_remaining(
+    tmp_path: Path,
+) -> None:
+    """A fix command that exits non-zero never scores a partial success.
+
+    Since #1743 no policy re-lints after a failed fix: the run-level verify
+    pass is the authority on what survived, and erring towards "nothing was
+    fixed" here keeps the pre-verify number from under-reporting.
 
     Args:
         tmp_path: Temporary directory for the SQL file.
@@ -248,16 +254,15 @@ def test_partial_fix_scores_only_the_issues_that_disappeared(tmp_path: Path) -> 
         side_effect=[
             (False, _sqlfluff_violations(3)),
             (False, "1 unfixable violation"),
-            (False, _sqlfluff_violations(1)),
         ],
     ):
         result = plugin.fix([str(query)], {})
 
     assert_that(result.success).is_false()
     assert_that(result.initial_issues_count).is_equal_to(3)
-    assert_that(result.fixed_issues_count).is_equal_to(2)
-    assert_that(result.remaining_issues_count).is_equal_to(1)
-    assert_that(result.issues).is_length(1)
+    assert_that(result.fixed_issues_count).is_equal_to(0)
+    assert_that(result.remaining_issues_count).is_equal_to(3)
+    assert_that(result.issues).is_length(3)
 
 
 def test_a_verifying_policy_requires_a_verification_failure_message() -> None:
@@ -265,5 +270,5 @@ def test_a_verifying_policy_requires_a_verification_failure_message() -> None:
     with pytest.raises(ValueError, match="verify_failure_message is required"):
         PerFileFixPolicy(
             check_failure_message="mytool check failed",
-            verify=VerifyMode.ALWAYS,
+            verify=VerifyMode.AFTER_SUCCESS,
         )

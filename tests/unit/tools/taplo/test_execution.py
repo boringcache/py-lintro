@@ -203,11 +203,16 @@ def test_fix_with_mocked_subprocess_success(
     assert_that(result.remaining_issues_count).is_equal_to(0)
 
 
-def test_fix_with_mocked_subprocess_partial_fix(
+def test_fix_measures_before_it_writes_and_never_re_lints(
     taplo_plugin: TaploPlugin,
     tmp_path: Path,
 ) -> None:
-    """Fix returns partial success when some issues cannot be fixed.
+    """Fix runs exactly three commands: format check, lint, then fmt.
+
+    Since #1743 taplo no longer re-runs ``fmt --check`` and ``lint`` in-process
+    to count what survived. What it still owns is the pre-fix measurement the
+    run-level verify pass subtracts its residual from — a fourth and fifth
+    subprocess call here would be that deleted implementation coming back.
 
     Args:
         taplo_plugin: The TaploPlugin instance to test.
@@ -246,16 +251,16 @@ def test_fix_with_mocked_subprocess_partial_fix(
                 (False, format_issue),  # initial format check
                 (False, lint_issue),  # initial lint check
                 (True, ""),  # fix command
-                (True, ""),  # final format check - format is fixed
-                (False, lint_issue),  # final lint check - syntax error remains
             ],
-        ):
+        ) as run_subprocess:
             result = taplo_plugin.fix([str(test_file)], {})
 
-    assert_that(result.success).is_false()
+    assert_that(run_subprocess.call_count).is_equal_to(3)
+    assert_that(result.success).is_true()
     assert_that(result.initial_issues_count).is_equal_to(2)
-    assert_that(result.fixed_issues_count).is_equal_to(1)
-    assert_that(result.remaining_issues_count).is_equal_to(1)
+    assert_that(result.initial_issues).is_length(2)
+    assert_that(result.fixed_issues_count).is_equal_to(2)
+    assert_that(result.remaining_issues_count).is_equal_to(0)
 
 
 def test_fix_with_no_changes_needed(

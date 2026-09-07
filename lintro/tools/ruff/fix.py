@@ -1,6 +1,14 @@
 """Ruff fix execution logic.
 
 Functions for running ruff fix commands and processing results.
+
+Since #1743 the remaining count this module computes is **not** the run's
+residual: ``lintro fmt`` discards it and takes the residual from the run-level
+verify pass, which alone can see a later tool (black, prettier) undoing ruff's
+work. What survives here is the pre-fix measurement — ``initial_issues_count``
+and ``initial_issues`` — which the verify pass subtracts from to report what
+ruff actually fixed. The counts are still filled in for callers that invoke
+``fix()`` directly, outside the executor.
 """
 
 import subprocess  # nosec B404 - subprocess used safely to execute ruff commands with controlled input
