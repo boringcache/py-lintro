@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from lintro.enums.action import Action, normalize_action
 from lintro.models.core.run_artifact import RunArtifact
 from lintro.models.core.tool_result import ToolResult
-from lintro.tools import tool_manager
+from lintro.tools import tool_manager, verify_pass
 from lintro.utils.execution.exit_codes import (
     DEFAULT_EXIT_CODE_FAILURE,
     DEFAULT_EXIT_CODE_SUCCESS,
@@ -49,22 +49,12 @@ from lintro.utils.execution.tool_configuration import (
     get_tool_display_name,
     get_tools_to_run,
 )
-from lintro.utils.execution.verify_pass import (
-    VerifyBaseline,
-    capture_verify_baseline,
-    fold_verify_results,
-    resolve_result_capability,
-    resolve_verify_scope,
-    run_verify_pass,
-)
 from lintro.utils.gates import execute_gates
 from lintro.utils.output import OutputManager
 from lintro.utils.unified_config import UnifiedConfigManager
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from lintro.plugins.base import BaseToolPlugin
 
 # Re-export constants and internals for backwards compatibility. The private
 # names stay importable from here because they were part of this module before
@@ -381,7 +371,7 @@ def _execute_tools_sequential(
 def _run_verify_phase(
     *,
     ctx: RunContext,
-    baseline: VerifyBaseline,
+    baseline: verify_pass.VerifyBaseline,
     tools_to_run: list[str],
     all_results: list[ToolResult],
     config_manager: UnifiedConfigManager,
@@ -418,16 +408,16 @@ def _run_verify_phase(
     if not baseline.candidates:
         return
 
-    scope = resolve_verify_scope(baseline)
+    scope = verify_pass.resolve_verify_scope(baseline)
 
-    def _configure_for_verify(*, tool_name: str) -> BaseToolPlugin:
+    def _configure_for_verify(*, tool_name: str) -> verify_pass.VerifiableTool:
         """Build the check-mode plugin copy the verify pass executes.
 
         Args:
             tool_name: Registry key of the tool to configure.
 
         Returns:
-            BaseToolPlugin: The configured per-invocation plugin copy.
+            VerifiableTool: The configured per-invocation plugin copy.
         """
         return configure_tool_for_execution(
             tool=tool_manager.get_tool(tool_name),
@@ -452,12 +442,12 @@ def _run_verify_phase(
             color="cyan",
         )
 
-    verify_outcomes = run_verify_pass(
+    verify_outcomes = verify_pass.run_verify_pass(
         tools_to_run=tools_to_run,
         scope=scope,
         configure=_configure_for_verify,
     )
-    fold_verify_results(
+    verify_pass.fold_verify_results(
         mutation_results=all_results,
         verify_results=verify_outcomes,
         scope=scope,
@@ -659,9 +649,9 @@ def execute_run(
     # could rewrite *before* the mutation phase, so the verify pass that
     # follows can be narrowed to the files that actually moved. ``chk`` and
     # the ``fmt --dry-run`` preview stay read-only and take no snapshot.
-    verify_baseline = VerifyBaseline(candidates=())
+    verify_baseline = verify_pass.VerifyBaseline(candidates=())
     if ctx.action == Action.FIX and not ctx.dry_run_preview:
-        verify_baseline = capture_verify_baseline(
+        verify_baseline = verify_pass.capture_verify_baseline(
             tools_to_run=tools_to_run,
             paths=paths,
             exclude=exclude,
@@ -688,7 +678,7 @@ def execute_run(
 
     for result in all_results:
         if result.capability is None and not result.skipped:
-            result.capability = resolve_result_capability(
+            result.capability = verify_pass.resolve_result_capability(
                 tool_name=result.name,
                 action=ctx.action,
             )

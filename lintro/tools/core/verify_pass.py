@@ -40,6 +40,18 @@ authoritative residual is therefore the verify pass's findings on the changed
 files plus the mutation phase's pre-fix findings on the unchanged ones, and
 ``fixed`` is derived from it rather than self-reported. Nothing is counted
 twice: a tool's own post-fix opinion is discarded, not added.
+
+Where this lives
+----------------
+The pass reads tool claims, configures plugins and normalises issue paths, so
+it sits in the ``tools`` layer next to
+:mod:`lintro.tools.core.scheduler` — ``lintro.utils`` may not import
+``lintro.tools``, ``lintro.plugins`` or ``lintro.parsers``. The half that is
+pure path and fingerprint arithmetic stays below it, in
+:mod:`lintro.utils.file_cache` and :mod:`lintro.utils.path_filtering`.
+:mod:`lintro.utils.tool_executor` drives the pipeline and reaches this module
+through the ``lintro.tools`` package re-export, which is the one edge the
+layering baseline already records for it.
 """
 
 from __future__ import annotations
@@ -47,26 +59,27 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from loguru import logger
 
 from lintro.enums.action import Action
 from lintro.enums.capability import MUTATING_CAPABILITIES, Cap
 from lintro.models.core.tool_result import ToolResult
-from lintro.plugins.file_discovery import setup_exclude_patterns
-from lintro.tools import tool_manager
+from lintro.parsers.base_issue import BaseIssue
 from lintro.utils.file_cache import FingerprintSnapshot, snapshot_fingerprints
-from lintro.utils.path_filtering import walk_files_with_excludes
+from lintro.utils.path_filtering import (
+    setup_exclude_patterns,
+    walk_files_with_excludes,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from lintro.models.core.claim import Claim
-    from lintro.parsers.base_issue import BaseIssue
-    from lintro.plugins.base import BaseToolPlugin
 
 __all__ = [
+    "VerifiableTool",
     "VerifyBaseline",
     "VerifyOutcome",
     "VerifyScope",
@@ -82,6 +95,32 @@ __all__ = [
 NARROWED_REASON: str = ""
 
 
+class VerifiableTool(Protocol):
+    """The one thing the verify pass needs a configured plugin to do.
+
+    Structural rather than nominal on purpose: ``lintro.tools`` and
+    ``lintro.plugins`` are sibling layers, so this module may not name
+    ``BaseToolPlugin``. It only ever calls ``check``, which makes the narrow
+    protocol the honest signature anyway.
+    """
+
+    def check(
+        self,
+        paths: list[str],
+        options: dict[str, object],
+    ) -> ToolResult:
+        """Report diagnostics for the given paths without modifying them.
+
+        Args:
+            paths: Files or directories to check.
+            options: Runtime options for this invocation.
+
+        Returns:
+            ToolResult: The tool's check-mode result.
+        """
+        ...  # pragma: no cover - protocol declaration
+
+
 def _claims_for(tool_name: str) -> list[Claim]:
     """Read a tool's declared claims, tolerating an unresolvable name.
 
@@ -91,6 +130,11 @@ def _claims_for(tool_name: str) -> list[Claim]:
     Returns:
         The tool's claims, or an empty list when it cannot be resolved.
     """
+    # Imported here rather than at module scope: ``lintro.tools.__init__``
+    # re-exports this module, so a top-level import would close a cycle. The
+    # scheduler resolves its own claims the same way.
+    from lintro.tools import tool_manager
+
     try:
         definition = tool_manager.get_tool(tool_name).definition
     except (AttributeError, KeyError, ValueError, RuntimeError):
@@ -358,7 +402,7 @@ def run_verify_pass(
     *,
     tools_to_run: Sequence[str],
     scope: VerifyScope,
-    configure: Callable[..., BaseToolPlugin],
+    configure: Callable[..., VerifiableTool],
 ) -> list[VerifyOutcome]:
     """Run the ``CHECK`` capability of every verifying tool over the scope.
 

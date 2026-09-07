@@ -1005,10 +1005,11 @@ prettier then reformats it, ruff's own post-fix lint already ran; a run-level pa
 the result of every mutating tool.
 
 **Scope.** Verifying every file again would double the cost of a format run, so the pass
-is narrowed by fingerprint (mtime + size, from `lintro/utils/file_cache.py`): every file
-a mutating capability could be handed is stat'ed before the mutation phase and
-re-stat'ed after, and only the files whose fingerprint moved are verified. A file nobody
-rewrote keeps the issues it had before the run, so narrowing never loses a residual.
+is narrowed by fingerprint (mtime + size, from `lintro/utils/file_cache.py`; the pass
+itself is `lintro/tools/core/verify_pass.py`): every file a mutating capability could be
+handed is stat'ed before the mutation phase and re-stat'ed after, and only the files
+whose fingerprint moved are verified. A file nobody rewrote keeps the issues it had
+before the run, so narrowing never loses a residual.
 
 mtime over-approximates: a formatter rewriting a file to byte-identical content still
 bumps mtime, so a file may be re-verified needlessly. That is a wasted check, not a

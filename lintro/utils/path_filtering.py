@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pathspec
+from loguru import logger
+
+from lintro.utils.path_utils import find_lintro_ignore
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -30,6 +33,61 @@ PROJECT_ROOT_MARKERS: tuple[str, ...] = (
 # Bound the upward search for a project root so a far filesystem ancestor is
 # never treated as the anchor. Mirrors the ``.lintro-ignore`` search bound.
 _ROOT_SEARCH_MAX_DEPTH: int = 20
+
+
+# Default exclude patterns for file discovery. Applied by every plugin's
+# discovery and by the run-level verify pass, so they live in the lowest layer
+# both can reach (#1743).
+DEFAULT_EXCLUDE_PATTERNS: list[str] = [
+    ".git",
+    ".hg",
+    ".svn",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    "*cache*",
+    ".coverage",
+    "htmlcov",
+    "dist",
+    "build",
+    "*.egg-info",
+]
+
+
+def setup_exclude_patterns(
+    exclude_patterns: list[str],
+) -> list[str]:
+    """Set up exclude patterns with defaults and .lintro-ignore.
+
+    Args:
+        exclude_patterns: Current exclude patterns to extend.
+
+    Returns:
+        Updated list of exclude patterns.
+    """
+    patterns = list(exclude_patterns)
+
+    # Add default exclude patterns
+    for pattern in DEFAULT_EXCLUDE_PATTERNS:
+        if pattern not in patterns:
+            patterns.append(pattern)
+
+    # Add .lintro-ignore patterns if present
+    try:
+        lintro_ignore_path = find_lintro_ignore()
+        if lintro_ignore_path and lintro_ignore_path.exists():
+            with open(lintro_ignore_path, encoding="utf-8") as f:
+                for line in f:
+                    line_stripped = line.strip()
+                    if not line_stripped or line_stripped.startswith("#"):
+                        continue
+                    if line_stripped not in patterns:
+                        patterns.append(line_stripped)
+    except (OSError, UnicodeDecodeError) as e:
+        logger.debug(f"Could not read .lintro-ignore: {e}")
+
+    return patterns
 
 
 @lru_cache(maxsize=32)
