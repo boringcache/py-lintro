@@ -24,6 +24,7 @@ from lintro.parsers.base_issue import BaseIssue
 from lintro.utils.execution import verify_pass
 from lintro.utils.execution.verify_pass import (
     VerifyBaseline,
+    VerifyOutcome,
     VerifyScope,
     capture_verify_baseline,
     fold_verify_results,
@@ -308,7 +309,7 @@ def test_run_verify_pass_runs_check_once_per_verifying_tool(
     )
     _register(monkeypatch, {"ruff": ruff, "prettier": prettier})
 
-    results = run_verify_pass(
+    outcomes = run_verify_pass(
         tools_to_run=["ruff", "prettier"],
         scope=VerifyScope(files=("/a.py",), narrowed=True),
         configure=lambda *, tool_name: cast(
@@ -317,25 +318,39 @@ def test_run_verify_pass_runs_check_once_per_verifying_tool(
         ),
     )
 
-    assert_that([r.name for r in results]).is_equal_to(["ruff"])
-    assert_that(results[0].capability).is_equal_to(Cap.CHECK)
+    assert_that([o.tool for o in outcomes]).is_equal_to(["ruff"])
+    assert_that(outcomes[0].result).is_not_none()
+    assert_that(outcomes[0].result.capability).is_equal_to(Cap.CHECK)
     assert_that(ruff.seen_files).is_equal_to(["/a.py"])
     assert_that(prettier.seen_files).is_none()
 
 
-def test_run_verify_pass_is_a_noop_when_nothing_changed(
+def test_an_empty_scope_still_reports_an_outcome_per_verifying_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An empty scope runs no tool at all."""
-    _register(monkeypatch, {})
+    """Nothing was rewritten, so no check runs — but the tool is still folded.
 
-    results = run_verify_pass(
+    Dropping the outcome would let the fold trust a mutating tool's own
+    ``remaining=0``, and a file with an unfixable issue that no formatter
+    rewrote would vanish from the run.
+    """
+    ruff = _FakeTool(
+        definition=_FakeDefinition(
+            claims=[Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})],
+        ),
+    )
+    _register(monkeypatch, {"ruff": ruff})
+
+    outcomes = run_verify_pass(
         tools_to_run=["ruff"],
         scope=VerifyScope(files=(), narrowed=True),
         configure=lambda *, tool_name: cast("BaseToolPlugin", None),
     )
 
-    assert_that(results).is_empty()
+    assert_that([o.tool for o in outcomes]).is_equal_to(["ruff"])
+    assert_that(outcomes[0].result).is_none()
+    assert_that(outcomes[0].ran).is_true()
+    assert_that(ruff.seen_files).is_none()
 
 
 def test_fold_replaces_the_tools_own_residual_without_double_counting() -> None:
@@ -363,7 +378,7 @@ def test_fold_replaces_the_tools_own_residual_without_double_counting() -> None:
 
     fold_verify_results(
         mutation_results=results,
-        verify_results=[verify],
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
         scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
     )
 
@@ -403,7 +418,7 @@ def test_fold_catches_a_residual_a_later_tool_reintroduced() -> None:
 
     fold_verify_results(
         mutation_results=results,
-        verify_results=[verify],
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
         scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
     )
 
@@ -433,7 +448,7 @@ def test_fold_keeps_pre_fix_issues_for_files_the_pass_did_not_verify() -> None:
 
     fold_verify_results(
         mutation_results=results,
-        verify_results=[verify],
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
         scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
     )
 
@@ -485,8 +500,14 @@ def test_fold_skips_a_skipped_or_timed_out_tool() -> None:
     fold_verify_results(
         mutation_results=results,
         verify_results=[
-            ToolResult(name="ruff", success=True, issues_count=0),
-            ToolResult(name="black", success=True, issues_count=0),
+            VerifyOutcome(
+                tool="ruff",
+                result=ToolResult(name="ruff", success=True, issues_count=0),
+            ),
+            VerifyOutcome(
+                tool="black",
+                result=ToolResult(name="black", success=True, issues_count=0),
+            ),
         ],
         scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
     )
@@ -528,3 +549,63 @@ def test_the_floor_hands_tools_the_original_scan_paths(
     assert_that(scope.summary).is_equal_to(
         "2 file(s) (coarse mtime resolution)",
     )
+
+
+def test_a_check_that_raises_carries_every_pre_fix_issue_and_fails() -> None:
+    """A verify we could not run must not read as "everything was fixed".
+
+    ``ran=False`` means the residual is unknown, so the fold falls back to the
+    tool's pre-fix findings for every file and refuses to report success.
+    """
+    mutation = ToolResult(
+        name="taplo",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("/repo/a.toml"), _issue("/repo/b.toml")],
+        initial_issues_count=2,
+        fixed_issues_count=2,
+        remaining_issues_count=0,
+        capability=Cap.FORMAT,
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="taplo", result=None, ran=False)],
+        scope=VerifyScope(files=("/repo/a.toml", "/repo/b.toml"), narrowed=True),
+    )
+
+    assert_that(results[0].remaining_issues_count).is_equal_to(2)
+    assert_that(results[0].fixed_issues_count).is_equal_to(0)
+    assert_that(results[0].success).is_false()
+
+
+def test_nothing_rewritten_keeps_the_issues_the_fix_pass_could_not_fix() -> None:
+    """An empty scope is a clean answer, not a licence to report zero.
+
+    The mutating tool claimed it fixed both issues; nothing on disk moved, so
+    both are still there.
+    """
+    mutation = ToolResult(
+        name="taplo",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("/repo/a.toml")],
+        initial_issues_count=1,
+        fixed_issues_count=1,
+        remaining_issues_count=0,
+        capability=Cap.FORMAT,
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="taplo", result=None, ran=True)],
+        scope=VerifyScope(files=(), narrowed=True),
+    )
+
+    assert_that(results[0].remaining_issues_count).is_equal_to(1)
+    assert_that(results[0].fixed_issues_count).is_equal_to(0)
+    assert_that(results[0].success).is_false()

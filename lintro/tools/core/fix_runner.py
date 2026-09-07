@@ -495,4 +495,8 @@ def run_per_file_fix(
         remaining_issues_count=remaining_count,
         initial_issues=tally.initial_issues or None,
         timed_out=result.timed_out,
+        # The run-level verify pass resolves each issue's file against this
+        # directory to decide whether the file was rewritten (#1743), so a
+        # relative ``issue.file`` must carry the directory it is relative to.
+        cwd=ctx.cwd,
     )

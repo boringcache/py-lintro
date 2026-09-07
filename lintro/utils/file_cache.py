@@ -271,17 +271,22 @@ class FingerprintSnapshot:
         actively misleading: on a filesystem with whole-second granularity a
         formatter that rewrites a file inside the same second leaves the
         fingerprint unmoved, and the file would be skipped by the verify pass.
-        Sub-second resolution shows up as at least one fractional ``st_mtime``,
-        so an all-integral sample is read as coarse and the caller falls back
-        to the documented floor.
+        Sub-second resolution shows up as a fractional ``st_mtime``.
+
+        Every sampled file must show one. Requiring only *some* of them would
+        miss the mixed case — a coarse bind mount alongside a sub-second local
+        filesystem — where the coarse half is exactly the half that can hide a
+        rewrite. A file whose mtime lands on an exact second by chance costs a
+        fallback to the floor, which is a wasted check rather than a wrong
+        answer.
 
         Returns:
-            True when the sample shows sub-second mtime resolution. An empty
-            sample is trivially reliable: there is nothing to narrow.
+            True when every sampled mtime shows sub-second resolution. An
+            empty sample is trivially reliable: there is nothing to narrow.
         """
         if not self.fingerprints:
             return True
-        return any(fp.mtime % 1 for fp in self.fingerprints.values())
+        return all(fp.mtime % 1 for fp in self.fingerprints.values())
 
     def changed_paths(self) -> list[str]:
         """Re-stat every fingerprinted file and return the ones that moved.
