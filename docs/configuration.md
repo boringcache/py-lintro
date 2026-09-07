@@ -1334,6 +1334,71 @@ lintro check --tools semgrep --tool-options "semgrep:severity=ERROR"
 lintro check --tools semgrep --tool-options "semgrep:exclude=tests/*|vendor/*"
 ```
 
+#### Cppcheck Configuration
+
+Cppcheck is a static analysis tool for C/C++ that detects undefined behavior,
+memory-safety defects, and other bugs. It is check-only (no auto-fix) and runs
+standalone on files without any build/project context.
+
+**Installation:**
+
+- macOS: `brew install cppcheck`
+- Debian/Ubuntu: `apt-get install cppcheck`
+
+Lintro runs Cppcheck over the files it discovers and drives it entirely through
+command-line options, so configuration goes through `--tool-options`. Cppcheck's own
+project modes (`--project=compile_commands.json`, GUI project files) and suppression
+files are not wired into the Lintro integration.
+
+Only source files (`.c`, `.cpp`, `.cc`, `.cxx`, `.c++`) are passed to Cppcheck. Headers
+handed to Cppcheck directly are analyzed as standalone translation units and misfire
+without the source that defines their macros and uses their declarations, so — as
+upstream's manual recommends — Lintro lets Cppcheck reach headers through the sources
+that `#include` them. `unusedFunction` is likewise unsupported and rejected with a
+`ValueError`, as is `all`, which implies it: they need whole-program visibility, while
+Lintro invokes Cppcheck on the file list discovered for the run — a path argument, a
+`--diff` scope, or the whole tree — so functions would be reported unused merely because
+their callers were outside that list.
+
+Lintro requires Cppcheck **2.13.0 or newer**. Cppcheck ships no portable single binary,
+so the Docker image installs Debian's package (currently 2.17.1 on trixie) and
+`install-tools.sh` uses apt or Homebrew. Distribution packages older than 2.13.0 are
+rejected by the version check; install from Homebrew or upstream in that case.
+
+**Available Options via `--tool-options`:**
+
+| Option         | Type           | Description                                                                                                                                                                                                                                                                                 |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enable`       | string \| list | Check categories forwarded to `--enable=`. Commas separate `--tool-options` entries, so several values are written pipe-separated (`cppcheck:enable=warning\|style`). Default `warning,style,performance,portability` (`error` checks always run). `unusedFunction` and `all` are rejected. |
+| `inconclusive` | bool           | Report findings cppcheck cannot fully confirm.                                                                                                                                                                                                                                              |
+| `std`          | string         | Language standard (e.g. `c11`, `c++17`).                                                                                                                                                                                                                                                    |
+| `inline_suppr` | bool           | Honor inline `// cppcheck-suppress` comments.                                                                                                                                                                                                                                               |
+| `suppress`     | string \| list | Suppression specifications forwarded to `--suppress=`, one flag per value. Several values are written pipe-separated (`cppcheck:suppress=missingInclude\|unusedStructMember`).                                                                                                              |
+
+**Example Usage:**
+
+```bash
+# Run with the default check set
+lintro check src/ --tools cppcheck
+
+# Enable only warnings, and assume C11. Options are comma-separated; the pipe
+# is the list separator *within* one value.
+lintro check src/ --tools cppcheck \
+  --tool-options "cppcheck:enable=warning,cppcheck:std=c11"
+
+# Enable several categories (pipe-delimited list inside one option)
+lintro check src/ --tools cppcheck --tool-options "cppcheck:enable=warning|style"
+
+# Include inconclusive findings and suppress missing-include noise
+lintro check src/ --tools cppcheck \
+  --tool-options "cppcheck:inconclusive=true,cppcheck:suppress=missingInclude"
+```
+
+Cppcheck's structured output is parsed from its native XML report (schema version 2).
+SARIF output is available in recent versions but is lossy for cppcheck (it collapses
+`style`/`performance`/`portability` into a single `warning` level), so the native XML
+parser is used. See [Cppcheck Analysis](./tool-analysis/cppcheck-analysis.md).
+
 #### Gitleaks Configuration
 
 **File:** `.gitleaks.toml`
