@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from assertpy import assert_that
 
+import lintro.tools as lintro_tools
 from lintro.enums.action import Action
 from lintro.enums.capability import Cap
 from lintro.models.core.claim import Claim
 from lintro.models.core.tool_result import ToolResult
 from lintro.parsers.base_issue import BaseIssue
-from lintro.utils.execution import verify_pass
-from lintro.utils.execution.verify_pass import (
+from lintro.tools.core.verify_pass import (
     VerifyBaseline,
     VerifyOutcome,
     VerifyScope,
@@ -40,7 +40,7 @@ from lintro.utils.file_cache import (
 )
 
 if TYPE_CHECKING:
-    from lintro.plugins.base import BaseToolPlugin
+    from lintro.tools.core.verify_pass import VerifiableTool
 
 
 @dataclass
@@ -90,6 +90,10 @@ def _register(
 ) -> None:
     """Point the verify pass's registry lookups at a fake tool table.
 
+    The pass resolves ``tool_manager`` lazily off ``lintro.tools`` (a top-level
+    import there would close a cycle with the package that re-exports it), so
+    the double is installed on the package rather than on the module.
+
     Args:
         monkeypatch: pytest monkeypatch fixture.
         tools: Fake tools keyed by registry name.
@@ -109,7 +113,7 @@ def _register(
             """
             return tools[name]
 
-    monkeypatch.setattr(verify_pass, "tool_manager", _Manager())
+    monkeypatch.setattr(lintro_tools, "tool_manager", _Manager())
 
 
 def _issue(path: str) -> BaseIssue:
@@ -313,7 +317,7 @@ def test_run_verify_pass_runs_check_once_per_verifying_tool(
         tools_to_run=["ruff", "prettier"],
         scope=VerifyScope(files=("/a.py",), narrowed=True),
         configure=lambda *, tool_name: cast(
-            "BaseToolPlugin",
+            "VerifiableTool",
             {"ruff": ruff, "prettier": prettier}[tool_name],
         ),
     )
@@ -345,7 +349,7 @@ def test_an_empty_scope_still_reports_an_outcome_per_verifying_tool(
     outcomes = run_verify_pass(
         tools_to_run=["ruff"],
         scope=VerifyScope(files=(), narrowed=True),
-        configure=lambda *, tool_name: cast("BaseToolPlugin", None),
+        configure=lambda *, tool_name: cast("VerifiableTool", None),
     )
 
     assert_that([o.tool for o in outcomes]).is_equal_to(["ruff"])
@@ -546,7 +550,7 @@ def test_the_floor_hands_tools_the_original_scan_paths(
     run_verify_pass(
         tools_to_run=["ruff"],
         scope=scope,
-        configure=lambda *, tool_name: cast("BaseToolPlugin", ruff),
+        configure=lambda *, tool_name: cast("VerifiableTool", ruff),
     )
 
     assert_that(ruff.seen_files).is_equal_to(["/repo"])
