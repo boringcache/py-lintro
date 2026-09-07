@@ -14,16 +14,16 @@ import pytest
 from assertpy import assert_that
 
 from lintro.ai.integrations.github_pr import GitHubPRReporter
+from lintro.ai.models.github_api_response import GitHubApiResponse
 from lintro.ai.review.github import post_review_to_github
 from lintro.ai.review.github_constants import STICKY_MARKER
-from lintro.ai.review.github_sticky import advance_review_state
 from lintro.ai.review.models.review_result import ReviewResult
+from lintro.ai.review.models.sticky_request import StickyRequest
 from lintro.ai.review.models.suggested_change import SuggestedChange
-from lintro.ai.review.review_state_codec import legacy_state_block
+from lintro.ai.review.review_state_codec import leftover_state_block
+from lintro.ai.review.sticky import advance_review_state
 
-_TEST_TOKEN = (
-    "ghp_test_fixture_token"  # noqa: S105  # nosec B105 — fake test fixture token
-)
+_TEST_TOKEN = "ghp_test_fixture_token"  # nosec B105 — fake test fixture token
 
 
 def _reporter() -> MagicMock:
@@ -40,7 +40,7 @@ def _reporter() -> MagicMock:
     reporter.fetch_pr_commit_shas.return_value = []
     reporter.post_issue_comment.return_value = True
     reporter.update_issue_comment.return_value = True
-    reporter.api_request.return_value = True
+    reporter.api_response.return_value = GitHubApiResponse(status=200)
     reporter.api_base = "https://api.github.com"
     reporter.repo = "owner/name"
     reporter.pr_number = 7
@@ -49,8 +49,10 @@ def _reporter() -> MagicMock:
 
 def _prior_sticky(*, result: ReviewResult, head_sha: str) -> str:
     """Render a leftover v2 sticky so posting can migrate prior state."""
-    state = advance_review_state(result=result, head_sha=head_sha)
-    return STICKY_MARKER + legacy_state_block(state=state)
+    state = advance_review_state(
+        request=StickyRequest(result=result, head_sha=head_sha),
+    )
+    return STICKY_MARKER + leftover_state_block(state=state)
 
 
 def _with_change(
@@ -80,7 +82,7 @@ def _inline_comments(*, reporter: MagicMock) -> list[dict[str, Any]]:
     Returns:
         The ``comments`` array of the review payload.
     """
-    payload = reporter.api_request.call_args.args[2]
+    payload = reporter.api_response.call_args.args[2]
     # Guard the positional index: if the production call ever stops passing the
     # payload third, this fails naming the cause instead of a bare KeyError.
     assert_that(payload).is_instance_of(dict)
@@ -395,14 +397,32 @@ def test_fetch_compare_lines_returns_none_without_a_files_array() -> None:
 def test_api_requests_never_replay_the_token_to_a_redirect_target() -> None:
     """Urllib copies ordinary headers across redirects; the token must not go."""
     reporter = GitHubPRReporter(token=_TEST_TOKEN, repo="owner/name", pr_number=7)
+    requests: list[urllib.request.Request] = []
 
-    with patch(
-        "urllib.request.urlopen",
-        return_value=_reader({"files": []}),
-    ) as urlopen:
-        reporter.fetch_compare_lines(base="aaa111", head="bbb222")
+    def _urlopen(
+        request: urllib.request.Request,
+        *_args: object,
+        **_kwargs: object,
+    ) -> MagicMock:
+        """Record the prepared request and answer with an empty file list.
 
-    request = urlopen.call_args.args[0]
+        Args:
+            request: The request urllib was asked to send.
+            *_args: Ignored positional extras.
+            **_kwargs: Ignored keyword extras.
+
+        Returns:
+            A reader over an empty ``files`` payload.
+        """
+        requests.append(request)
+        return _reader({"files": []})
+
+    with patch("urllib.request.urlopen", _urlopen):
+        lines = reporter.fetch_compare_lines(base="aaa111", head="bbb222")
+
+    assert_that(lines).is_equal_to({})
+    assert_that(requests).is_length(1)
+    request = requests[0]
     # ``header_items()`` merges both maps, so the split is only visible in the
     # underlying dicts: ordinary headers ride along on a redirect, unredirected
     # ones do not.

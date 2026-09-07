@@ -8,7 +8,11 @@ from rich.text import Text
 
 from lintro.ai.cost import format_cost
 from lintro.ai.display.shared import cost_str, print_section_header
-from lintro.ai.resolved_ai_config import format_max_cost_label, format_sourced_value
+from lintro.ai.resolved_ai_config import (
+    MAX_COST_LABEL,
+    format_max_cost_label,
+    format_sourced_value,
+)
 from lintro.ai.review.checklist_display import (
     cleared_answers,
     orphan_concerns,
@@ -22,6 +26,8 @@ from lintro.ai.review.enums.checklist_display import ChecklistDisplay
 from lintro.ai.review.models.review_finding import ReviewFinding
 from lintro.ai.review.models.review_result import ReviewResult
 from lintro.ai.review.patch_validation import describe_suggestion_drops
+from lintro.ai.review.severity_gate import describe_cross_chunk_contradictions
+from lintro.ai.review.synthesis_note import format_synthesis_note
 from lintro.ai.review.timings import format_timing_summary
 
 __all__ = ["render_review_terminal"]
@@ -63,7 +69,7 @@ def render_review_terminal(
             max_cost_usd=metadata.max_cost_usd,
             source=metadata.max_cost_usd_source,
         )
-        max_cost_parts = f" | Max cost: {cap_label}"
+        max_cost_parts = f" | {MAX_COST_LABEL}: {cap_label}"
     header_detail = (
         f"Model: {format_sourced_value(metadata.model, metadata.model_source)} | "
         f"Provider: "
@@ -101,6 +107,12 @@ def render_review_terminal(
             f"[bold yellow]⚠ {COVERAGE_LIMITED_HEADLINE}[/bold yellow]",
         )
         output.print(f"[yellow]{coverage_note}[/yellow]")
+
+    synthesis_note = format_synthesis_note(metadata=metadata)
+    if synthesis_note:
+        # Only rendered when the optional cross-chunk pass actually ran, so a
+        # default run's terminal output is unchanged (#2269).
+        output.print(f"[dim]{synthesis_note}[/dim]")
 
     if metadata.timings is not None:
         # One line, always on: which phase dominated the wait (#2148).
@@ -154,6 +166,11 @@ def _render_findings(
     drops = describe_suggestion_drops(findings=result.findings)
     if drops:
         console.print(f"[yellow]{drops}[/yellow]")
+    contradictions = describe_cross_chunk_contradictions(findings=result.findings)
+    if contradictions:
+        # No silent edits: a guard-driven downgrade is stated where the
+        # severities it changed are read (#2265).
+        console.print(f"[yellow]{contradictions}[/yellow]")
 
     for index, finding in enumerate(sorted_findings, start=1):
         _render_finding_panel(
