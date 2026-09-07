@@ -24,6 +24,26 @@ SEMGREP_ISOLATED_INSTALL_HINT = (
     "or brew install semgrep"
 )
 
+#: Checkov requires ``packaging>=23.0,<24.0`` while lintro requires
+#: ``packaging>=25.0``, so it can never be pip-installed into the project
+#: environment; ``install-tools.sh`` puts it in its own ``uv tool`` venv (#422).
+CHECKOV_ISOLATED_INSTALL_HINT = (
+    "Install via: uv tool install checkov "
+    "(isolated venv; checkov pins packaging<24 and cannot share "
+    "lintro's environment)"
+)
+
+#: Tools whose install and upgrade guidance must always point at an isolated
+#: venv, whatever install strategy the manifest routes them through. Both
+#: entries pin transitive dependencies that conflict with lintro's own, so
+#: neither may be installed into the project environment (#2104, #422), and
+#: neither publishes the release binaries a ``binary`` strategy would otherwise
+#: send a user hunting for.
+ISOLATED_INSTALL_HINTS: dict[str, str] = {
+    "semgrep": SEMGREP_ISOLATED_INSTALL_HINT,
+    "checkov": CHECKOV_ISOLATED_INSTALL_HINT,
+}
+
 _MANUAL_HINT_PREFIXES = ("See ", "Install ", "Upgrade ")
 
 

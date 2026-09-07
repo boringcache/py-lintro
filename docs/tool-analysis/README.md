@@ -56,6 +56,15 @@ implementations with the core tools themselves.
 - ⚠️ **Limited**: No auto-fix, limited CLI pass-through, single-process execution
 - 🚀 **Enhanced**: Central line-length injection, normalized issues, safe version checks
 
+### [Checkov Analysis](./checkov-analysis.md)
+
+**Terraform Infrastructure-as-Code Security Scanner**
+
+- ✅ **Preserved**: Check ID, resource attribution, line range, honest null severity
+- ⚠️ **Limited**: Check-only, Terraform-scoped; severity needs a platform API key
+- 🚀 **Notes**: Native JSON parser (SARIF is lossy for checkov); hermetic by
+  construction
+
 ### [Cppcheck Analysis](./cppcheck-analysis.md)
 
 **C/C++ Static Analyzer**

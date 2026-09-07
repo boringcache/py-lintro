@@ -305,6 +305,17 @@ Choose the path that matches the tool's distribution mechanism.
    `lintro_build/versions/generate.py` so the generator still reads the pin from
    `requirements-semgrep.txt`.
 
+   Checkov is the second exception and takes **Path A** instead, despite being a PyPI
+   distribution. It requires `packaging<24` while lintro requires `packaging>=25`, so
+   any pyproject entry makes `uv lock` unsatisfiable; and a `requirements-checkov.txt`
+   would be scanned and transitively resolved by this repository's own osv-scanner
+   dogfood, reporting advisories for a tree lintro never installs. Its pin therefore
+   lives in `TOOL_VERSIONS` with a pypi-datasource Renovate manager, its manifest entry
+   says `install.type = "binary"` (the manifest's label for "an executable
+   `install-tools.sh` puts on PATH", not a claim about upstream packaging), and the
+   installer uses `uv tool install checkov==<pin>`. Take this path for any PyPI tool
+   that cannot share lintro's resolution.
+
 3. **`lintro/tools/manifest.src.json`** — add the tool entry with `install.type = "pip"`
    and `install.package = "<pypi-package>"`, and **no `version` key**; the generator
    injects the version from `pyproject.toml`.

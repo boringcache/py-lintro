@@ -3188,6 +3188,59 @@ RUN apt-get update && apt-get install -y \
     python3-pip
 ```
 
+#### Checkov Configuration
+
+Checkov scans **Terraform** sources (`*.tf`, `*.tf.json`) for security and compliance
+misconfigurations. Dockerfiles are intentionally left to hadolint to avoid
+double-reporting the same file under two rule sets. Runs are offline by construction:
+`--skip-download` and `--download-external-modules False` are always passed and no
+`--bc-api-key` code path exists, so no lintro option can make checkov fetch policies or
+modules, or upload a finding. `--skip-download` is also what suppresses the platform
+metadata download, so severity and guideline URLs stay unpopulated in **every**
+lintro-driven run — a `BC_API_KEY` exported in the environment cannot restore them.
+Checkov does still read that variable itself, so unset it if a run must make no outbound
+request at all.
+
+- Discovery: Terraform files (`*.tf`, `*.tf.json`)
+- Native config: `.checkov.yaml` / `.checkov.yml`
+- Install: `uv tool install checkov` (isolated venv), or
+  `scripts/utils/install-tools.sh --local --tools checkov`. Checkov requires
+  `packaging<24` while lintro requires `packaging>=25`, so it is deliberately not part
+  of `lintro[tools]` and must never be pip-installed into lintro's own environment. The
+  pinned version lives in `lintro/_tool_versions.py`; `brew install checkov` also works
+  but Homebrew's formula lags upstream, so it may sit below that pin (the supported
+  floor in `manifest.src.json` is deliberately lower, so a brew install still runs).
+
+**Tool options:**
+
+| Option        | Type          | Default | Description                                   |
+| ------------- | ------------- | ------- | --------------------------------------------- |
+| `checks`      | list / string | -       | Run only these check IDs (`--check`)          |
+| `skip_checks` | list / string | -       | Skip these check IDs (`--skip-check`)         |
+| `compact`     | bool          | `true`  | Omit the offending code block from the report |
+| `timeout`     | int           | `120`   | Per-invocation timeout in seconds             |
+
+`--tool-options` splits on commas, so several check IDs are passed pipe-delimited:
+
+```bash
+# Skip specific policies
+lintro check --tools checkov --tool-options "checkov:skip_checks=CKV_AWS_18|CKV_AWS_21"
+
+# Run only specific policies
+lintro check --tools checkov --tool-options "checkov:checks=CKV_AWS_260"
+```
+
+> Note: Checkov's own `severity` and `guideline` fields come from platform metadata it
+> downloads, which `--skip-download` suppresses on every lintro run. Findings therefore
+> normalize to lintro's default severity and link to the Checkov policy index. The
+> parser still reads both fields so nothing is lost if that ever changes.
+
+Checkov is listed under both `terraform` and `security` in the manifest language map, so
+a no-config run that detects Terraform — or any run that selects the security set with
+`checkov` on `PATH` — will invoke it. That can fail previously green Terraform CI on
+first upgrade. Disable it with `tools.checkov.enabled: false`, or skip individual
+policies with `checkov:skip_checks`.
+
 #### Actionlint Configuration
 
 Actionlint validates GitHub Actions workflows. Lintro discovers workflow files under
