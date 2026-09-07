@@ -22,7 +22,10 @@ from lintro.enums.capability import Cap
 from lintro.models.core.claim import Claim
 from lintro.models.core.tool_result import ToolResult
 from lintro.parsers.base_issue import BaseIssue
+from lintro.tools.core import verify_pass
 from lintro.tools.core.verify_pass import (
+    COARSE_MTIME_REASON,
+    UNREADABLE_REASON,
     VerifyBaseline,
     VerifyOutcome,
     VerifyScope,
@@ -270,7 +273,7 @@ def test_resolve_verify_scope_falls_back_to_the_floor_on_coarse_mtimes() -> None
     scope = resolve_verify_scope(baseline)
 
     assert_that(scope.narrowed).is_false()
-    assert_that(scope.floor_reason).is_equal_to("coarse mtime resolution")
+    assert_that(scope.floor_reason).is_equal_to(COARSE_MTIME_REASON)
     assert_that(list(scope.files)).is_equal_to(["/a.py", "/b.py"])
 
 
@@ -290,9 +293,7 @@ def test_resolve_verify_scope_falls_back_when_a_file_cannot_be_fingerprinted(
     scope = resolve_verify_scope(baseline)
 
     assert_that(scope.narrowed).is_false()
-    assert_that(scope.floor_reason).is_equal_to(
-        "some files could not be fingerprinted",
-    )
+    assert_that(scope.floor_reason).is_equal_to(UNREADABLE_REASON)
     assert_that(list(scope.files)).is_equal_to(list(candidates))
 
 
@@ -543,7 +544,7 @@ def test_the_floor_hands_tools_the_original_scan_paths(
     scope = VerifyScope(
         files=("/repo/a.py", "/repo/b.py"),
         narrowed=False,
-        floor_reason="coarse mtime resolution",
+        floor_reason=COARSE_MTIME_REASON,
         targets=("/repo",),
     )
 
@@ -555,7 +556,7 @@ def test_the_floor_hands_tools_the_original_scan_paths(
 
     assert_that(ruff.seen_files).is_equal_to(["/repo"])
     assert_that(scope.summary).is_equal_to(
-        "2 file(s) (coarse mtime resolution)",
+        f"2 file(s) ({COARSE_MTIME_REASON})",
     )
 
 
@@ -617,3 +618,125 @@ def test_nothing_rewritten_keeps_the_issues_the_fix_pass_could_not_fix() -> None
     assert_that(results[0].remaining_issues_count).is_equal_to(1)
     assert_that(results[0].fixed_issues_count).is_equal_to(0)
     assert_that(results[0].success).is_false()
+
+
+def test_a_relative_issue_path_resolves_against_the_tools_working_directory() -> None:
+    """Tool paths are relative; scope files are absolute. The fold joins them.
+
+    ruff, ``run_per_file_fix``, clippy and rustfmt all report paths relative to
+    the directory they ran in. If the fold compared those strings to the
+    absolute paths it fingerprinted, a file the pass *did* re-check would look
+    unverified and its pre-fix findings would be counted a second time.
+    """
+    mutation = ToolResult(
+        name="ruff",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("a.py"), _issue("sub/b.py")],
+        initial_issues_count=2,
+        fixed_issues_count=2,
+        remaining_issues_count=0,
+        cwd="/repo",
+        capability=Cap.FIX,
+    )
+    verify = ToolResult(name="ruff", success=True, issues_count=0, issues=[])
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
+        # Absolute, the way ``walk_files_with_excludes`` reports them.
+        scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
+    )
+
+    folded = results[0]
+    # a.py was verified and came back clean; sub/b.py never was, so it stands.
+    assert_that(folded.remaining_issues_count).is_equal_to(1)
+    assert_that([i.file for i in folded.issues or []]).is_equal_to(["sub/b.py"])
+
+
+def test_a_check_that_raises_a_programming_error_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bug in the verify path is not a tool that could not run.
+
+    The mutation phase re-raises ``TypeError``/``AttributeError`` instead of
+    folding them into a failed result; the verify pass matches it.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    ruff = _FakeTool(
+        definition=_FakeDefinition(
+            claims=[Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})],
+        ),
+    )
+    _register(monkeypatch, {"ruff": ruff})
+
+    def _boom(*, tool_name: str) -> VerifiableTool:
+        raise AttributeError(tool_name)
+
+    with pytest.raises(AttributeError):
+        run_verify_pass(
+            tools_to_run=["ruff"],
+            scope=VerifyScope(files=("/a.py",), narrowed=True),
+            configure=_boom,
+        )
+
+
+def test_capture_verify_baseline_honours_the_runs_incremental_scope(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Under ``--incremental`` the floor is what this run could have touched.
+
+    Without this the floor re-checks the whole tree and reports every
+    pre-existing diagnostic in it as the run's residual.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        tmp_path: Temporary workspace.
+    """
+    changed = tmp_path / "changed.py"
+    unchanged = tmp_path / "unchanged.py"
+    changed.write_text("x = 1\n", encoding="utf-8")
+    unchanged.write_text("y = 2\n", encoding="utf-8")
+    _register(
+        monkeypatch,
+        {
+            "black": _FakeTool(
+                definition=_FakeDefinition(
+                    claims=[Claim(patterns=["*.py"], capabilities={Cap.FORMAT})],
+                ),
+            ),
+        },
+    )
+    monkeypatch.setattr(
+        verify_pass,
+        "_incremental_subset",
+        lambda *, tool_name, files: [f for f in files if str(changed) == f],
+    )
+
+    baseline = capture_verify_baseline(
+        tools_to_run=["black"],
+        paths=[str(tmp_path)],
+        exclude=None,
+        include_venv=False,
+        incremental=True,
+    )
+
+    assert_that(list(baseline.candidates)).is_equal_to([str(changed)])
+    # The scan paths cover more than the candidates now, so the floor must
+    # name the files rather than re-widening to the tree.
+    assert_that(list(baseline.scan_paths)).is_empty()
+    assert_that(
+        list(
+            VerifyScope(
+                files=baseline.candidates,
+                narrowed=False,
+                floor_reason=COARSE_MTIME_REASON,
+                targets=baseline.scan_paths,
+            ).scan_targets,
+        ),
+    ).is_equal_to([str(changed)])

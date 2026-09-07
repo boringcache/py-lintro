@@ -326,3 +326,47 @@ def test_fix_with_no_toml_files(
 
     assert_that(result.success).is_true()
     assert_that(result.output).contains("No .toml files")
+
+
+def test_fix_fails_when_the_format_command_fails(
+    taplo_plugin: TaploPlugin,
+    tmp_path: Path,
+) -> None:
+    """A `taplo fmt` that could not write must fail the result.
+
+    The run-level verify pass (#1743) replaced the post-fix re-lint, not the
+    exit status of the mutation command. A write error on an already-clean
+    file leaves nothing for a later CHECK to find, so a dropped failure would
+    read as a clean run with exit code 0 and taplo's stderr thrown away.
+
+    Args:
+        taplo_plugin: The TaploPlugin instance to test.
+        tmp_path: Temporary directory path for test files.
+    """
+    test_file = copy_sample(
+        tmp_path,
+        "tools",
+        "config",
+        "taplo",
+        "taplo_clean.toml",
+        dest_name="test.toml",
+    )
+
+    with patch(
+        "lintro.plugins.execution_preparation.verify_tool_version",
+        return_value=None,
+    ):
+        with patch.object(
+            taplo_plugin,
+            "_run_subprocess",
+            side_effect=[
+                (True, ""),  # initial format check: clean
+                (True, ""),  # initial lint check: clean
+                (False, "error: failed to write test.toml"),  # fmt fails
+            ],
+        ):
+            result = taplo_plugin.fix([str(test_file)], {})
+
+    assert_that(result.success).is_false()
+    assert_that(result.output).contains("failed to write test.toml")
+    assert_that(result.fixed_issues_count).is_equal_to(0)

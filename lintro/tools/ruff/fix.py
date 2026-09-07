@@ -11,6 +11,7 @@ ruff actually fixed. The counts are still filled in for callers that invoke
 ``fix()`` directly, outside the executor.
 """
 
+import os
 import subprocess  # nosec B404 - subprocess used safely to execute ruff commands with controlled input
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -18,6 +19,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from lintro.parsers.base_issue import BaseIssue
+from lintro.parsers.ruff.ruff_format_issue import RuffFormatIssue
 from lintro.parsers.ruff.ruff_parser import (
     parse_ruff_format_check_output,
     parse_ruff_output,
@@ -76,6 +79,26 @@ def _temporary_option(
         elif option_key in tool.options:
             # Remove the key if it wasn't originally present
             del tool.options[option_key]
+
+
+def _absolute_paths(*, files: list[str], cwd: str | None) -> list[str]:
+    """Resolve ruff's reported paths against the directory it ran in.
+
+    Args:
+        files: Paths exactly as ruff printed them.
+        cwd: Working directory the command ran in.
+
+    Returns:
+        Absolute paths, so the verify pass can match them against the files it
+        fingerprinted.
+    """
+    resolved: list[str] = []
+    for path in files:
+        if cwd and not os.path.isabs(path):
+            resolved.append(os.path.abspath(os.path.join(cwd, path)))
+        else:
+            resolved.append(path)
+    return resolved
 
 
 def execute_ruff_fix(
@@ -146,7 +169,7 @@ def execute_ruff_fix(
             remaining_issues_count=None,
             cwd=ctx.cwd,
         )
-    initial_issues = parse_ruff_output(output=output_check)
+    initial_issues: list[BaseIssue] = list(parse_ruff_output(output=output_check))
     initial_count: int = len(initial_issues)
 
     # Also check formatting issues before fixing
@@ -189,6 +212,15 @@ def execute_ruff_fix(
             )
         format_files = parse_ruff_format_check_output(output=output_format_check)
         initial_format_count = len(format_files)
+        # Record the formatting findings as issues, not just as a count. The
+        # run-level verify pass (#1743) derives its residual from
+        # ``initial_issues`` for every file it did not re-check, so a finding
+        # that exists only as a number would silently become "fixed" whenever
+        # the pass cannot run.
+        initial_issues.extend(
+            RuffFormatIssue(file=path)
+            for path in _absolute_paths(files=format_files, cwd=ctx.cwd)
+        )
 
     # Track initial totals separately for accurate fixed/remaining math
     total_initial_count: int = initial_count + initial_format_count

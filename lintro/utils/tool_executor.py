@@ -656,6 +656,10 @@ def execute_run(
             paths=paths,
             exclude=exclude,
             include_venv=include_venv,
+            # Scoped exactly like the mutation phase: a floor fallback must
+            # never re-check files this run could not have touched.
+            incremental=incremental,
+            diff_base=resolved_diff_base,
         )
 
     execute_tools = (
