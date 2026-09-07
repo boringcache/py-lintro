@@ -1,9 +1,8 @@
-"""Tests for the shadow-mode order scheduler (#1741).
+"""Tests for the claims-derived order scheduler (#1741, #1742).
 
-The scheduler derives an execution order from declared claims and diffs it
-against the order lintro runs today. Nothing it produces is allowed to reach
-execution, so these tests also pin that the live ordering entry point is
-untouched.
+The scheduler derives an execution order from declared claims, and since
+#1742 that order is the one lintro runs, so these tests also pin that the
+live ordering entry point returns exactly what the scheduler derives.
 """
 
 from __future__ import annotations
@@ -14,11 +13,10 @@ from lintro.enums.capability import Cap
 from lintro.models.core.claim import Claim
 from lintro.tools.core.scheduler import (
     PHASE_ORDER,
-    OrderShadowReport,
-    build_shadow_report,
+    build_order_report,
     collect_tool_claims,
+    derive_execution_order,
     derive_order,
-    diff_orders,
 )
 
 
@@ -146,38 +144,6 @@ def test_tool_without_claims_stays_unordered() -> None:
     assert_that(list(derived.tools)).is_equal_to(["commitlint", "ruff"])
 
 
-def test_diff_reports_only_violated_constraints() -> None:
-    """A current order that satisfies every edge yields no differences."""
-    derived = derive_order(
-        {
-            "black": _claims((["*.py"], {Cap.FORMAT})),
-            "ruff": _claims((["*.py"], {Cap.FIX})),
-        },
-    )
-
-    assert_that(diff_orders(derived, ["ruff", "black"])).is_empty()
-
-    differences = diff_orders(derived, ["black", "ruff"])
-    assert_that(differences).is_length(1)
-    assert_that(differences[0].before).is_equal_to("ruff")
-    assert_that(differences[0].after).is_equal_to("black")
-    assert_that([edge.reason for edge in differences[0].edges]).is_equal_to(
-        ["*.py: ruff(fix) -> black(format)"],
-    )
-
-
-def test_diff_ignores_tools_outside_the_current_order() -> None:
-    """Edges touching a tool the run did not select are not reported."""
-    derived = derive_order(
-        {
-            "black": _claims((["*.py"], {Cap.FORMAT})),
-            "ruff": _claims((["*.py"], {Cap.FIX})),
-        },
-    )
-
-    assert_that(diff_orders(derived, ["black"])).is_empty()
-
-
 def test_collect_tool_claims_reads_the_registry() -> None:
     """Registered tools hand back the claims their definitions declare."""
     claims = collect_tool_claims(["ruff", "black"])
@@ -189,33 +155,47 @@ def test_collect_tool_claims_reads_the_registry() -> None:
     assert_that(ruff_caps).contains(Cap.FIX)
 
 
-def test_build_shadow_report_recovers_ruff_before_black() -> None:
-    """The headline disagreement from #1735 shows up in the report."""
-    report = build_shadow_report(["black", "ruff"])
+def test_build_order_report_recovers_ruff_before_black() -> None:
+    """The headline pairing from #1735 falls out of the derivation."""
+    report = build_order_report(["black", "ruff"])
 
-    assert_that(report).is_instance_of(OrderShadowReport)
-    assert_that(list(report.current)).is_equal_to(["black", "ruff"])
-    assert_that(list(report.derived)).is_equal_to(["ruff", "black"])
-    assert_that(report.agrees).is_false()
+    assert_that(list(report.tools)).is_equal_to(["ruff", "black"])
+    assert_that(report.cycles).is_empty()
     assert_that(
-        [(d.before, d.after) for d in report.differences],
-    ).is_equal_to([("ruff", "black")])
+        [(edge.before, edge.after) for edge in report.edges],
+    ).contains(("ruff", "black"))
 
 
-def test_build_shadow_report_normalizes_tool_names() -> None:
+def test_derive_execution_order_normalizes_tool_names() -> None:
     """Names are lowercased before they reach the registry."""
-    report = build_shadow_report(["RUFF", "Black"])
+    assert_that(derive_execution_order(["RUFF", "Black"])).is_equal_to(
+        ["ruff", "black"],
+    )
 
-    assert_that(list(report.current)).is_equal_to(["ruff", "black"])
+
+def test_derive_execution_order_tolerates_an_unresolvable_tool() -> None:
+    """An unresolvable name stays in the order, unconstrained."""
+    order = derive_execution_order(["ruff", "not-a-registered-tool"])
+
+    # Compared unsorted: an unconstrained pair breaks alphabetically, so the
+    # unresolvable name genuinely precedes ruff rather than merely appearing.
+    assert_that(order).is_equal_to(["not-a-registered-tool", "ruff"])
 
 
-def test_shadow_mode_does_not_touch_the_live_order() -> None:
-    """The live scheduler still returns the scalar-priority order."""
+def test_live_order_is_exactly_the_derived_order() -> None:
+    """``get_tool_execution_order`` returns what the scheduler derives."""
     from lintro.tools import tool_manager
 
-    live = tool_manager.get_tool_execution_order(["ruff", "black"])
+    selection = ["black", "ruff", "mypy"]
 
-    assert_that(list(live)).is_equal_to(["black", "ruff"])
+    # Both the observable order and the equality: shared sort bug would
+    # otherwise satisfy the equality alone.
+    assert_that(derive_execution_order(selection)).is_equal_to(
+        ["ruff", "black", "mypy"],
+    )
+    assert_that(
+        tool_manager.get_tool_execution_order(selection),
+    ).is_equal_to(derive_execution_order(selection))
 
 
 def test_narrow_globs_do_not_subsume_each_other() -> None:
@@ -229,3 +209,23 @@ def test_narrow_globs_do_not_subsume_each_other() -> None:
 
     assert_that(derived.edges).is_empty()
     assert_that(list(derived.tools)).is_equal_to(["broad_fixer", "narrow_checker"])
+
+
+def test_manager_rejects_an_unknown_name_the_scheduler_tolerates() -> None:
+    """The two contracts are deliberately different, and both are live.
+
+    ``derive_execution_order`` is total: an unresolvable name stays in the
+    order, unconstrained, so a caller that is not the manager still gets a
+    usable schedule. ``ToolManager.get_tool_execution_order`` resolves every
+    name first, so the CLI still fails loudly on a typo.
+    """
+    from lintro.tools import tool_manager
+
+    assert_that(derive_execution_order(["not-a-registered-tool"])).is_equal_to(
+        ["not-a-registered-tool"],
+    )
+    assert_that(
+        tool_manager.get_tool_execution_order,
+    ).raises(
+        ValueError,
+    ).when_called_with(["not-a-registered-tool"])
