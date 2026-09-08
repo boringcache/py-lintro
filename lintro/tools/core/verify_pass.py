@@ -230,8 +230,10 @@ class VerifyOutcome:
         result: Its ``CHECK`` result, or ``None`` when no check was run —
             either because nothing was rewritten or because the check raised.
         ran: False only when the check raised. A ``None`` result with
-            ``ran=True`` means "nothing needed verifying", which is a clean
-            answer; ``ran=False`` means "we could not tell", which fails.
+            ``ran=True`` means nothing was rewritten, so ``CHECK`` was skipped
+            and the fold keeps the mutation phase's pre-fix findings (which
+            may still fail the run); ``ran=False`` means "we could not tell",
+            which fails.
     """
 
     tool: str
