@@ -267,23 +267,29 @@ class FingerprintSnapshot:
     def is_reliable(self) -> bool:
         """Report whether the snapshot can narrow anything at all.
 
-        mtime resolution is the one property that can make fingerprints
-        actively misleading: on a filesystem with whole-second granularity a
-        formatter that rewrites a file inside the same second leaves the
-        fingerprint unmoved, and the file would be skipped by the verify pass.
-        Sub-second resolution shows up as a fractional ``st_mtime``.
+        Two things can make a snapshot unusable.
 
-        Every sampled file must show one. Requiring only *some* of them would
-        miss the mixed case — a coarse bind mount alongside a sub-second local
-        filesystem — where the coarse half is exactly the half that can hide a
-        rewrite. A file whose mtime lands on an exact second by chance costs a
-        fallback to the floor, which is a wasted check rather than a wrong
-        answer.
+        A file that could not be stat'ed at all has no fingerprint to compare
+        against, so nothing can be concluded about it, and "we do not know"
+        must widen the scope rather than narrow it.
+
+        mtime resolution is the subtler one: on a filesystem with whole-second
+        granularity a formatter that rewrites a file inside the same second
+        leaves the fingerprint unmoved, and the file would be skipped. Every
+        sampled file must show a fractional ``st_mtime``. Requiring only
+        *some* of them would miss the mixed case — a coarse bind mount
+        alongside a sub-second local filesystem — where the coarse half is
+        exactly the half that can hide a rewrite. A file whose mtime lands on
+        an exact second by chance costs a fallback to the floor, which is a
+        wasted check rather than a wrong answer.
 
         Returns:
-            True when every sampled mtime shows sub-second resolution. An
-            empty sample is trivially reliable: there is nothing to narrow.
+            True when nothing was unreadable and every sampled mtime shows
+            sub-second resolution. An empty sample is trivially reliable:
+            there is nothing to narrow.
         """
+        if self.unreadable:
+            return False
         if not self.fingerprints:
             return True
         return all(fp.mtime % 1 for fp in self.fingerprints.values())

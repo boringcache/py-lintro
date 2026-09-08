@@ -411,18 +411,22 @@ def resolve_verify_scope(baseline: VerifyBaseline) -> VerifyScope:
     """
     if not baseline.candidates:
         return VerifyScope(files=(), narrowed=True)
+    # Unreadable first: a snapshot with a failed stat is also not reliable, so
+    # the order is what decides which of the two reasons the run reports.
+    if baseline.snapshot.unreadable or len(baseline.snapshot.fingerprints) != len(
+        baseline.candidates,
+    ):
+        return VerifyScope(
+            files=baseline.candidates,
+            narrowed=False,
+            floor_reason=UNREADABLE_REASON,
+            targets=baseline.scan_paths,
+        )
     if not baseline.snapshot.is_reliable:
         return VerifyScope(
             files=baseline.candidates,
             narrowed=False,
             floor_reason=COARSE_MTIME_REASON,
-            targets=baseline.scan_paths,
-        )
-    if len(baseline.snapshot.fingerprints) != len(baseline.candidates):
-        return VerifyScope(
-            files=baseline.candidates,
-            narrowed=False,
-            floor_reason=UNREADABLE_REASON,
             targets=baseline.scan_paths,
         )
     return VerifyScope(
