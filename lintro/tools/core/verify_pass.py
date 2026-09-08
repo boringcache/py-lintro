@@ -549,8 +549,12 @@ def _fold_one(
     """
     verify = outcome.result
     # A verify that could not run has verified nothing, so every pre-fix issue
-    # is carried and the run reports a failure rather than a silent zero.
-    verified_paths = set(scope.files) if verify is not None else set()
+    # is carried and the run reports a failure rather than a silent zero. The
+    # same holds for a CHECK that ran but produced no verdict: a timeout or an
+    # execution error comes back as ``success=False`` with no parsed issues,
+    # and treating that as "clean" would drop the pre-fix findings.
+    check_answered = verify is not None and (verify.success or bool(verify.issues))
+    verified_paths = set(scope.files) if check_answered else set()
     survivors: list[BaseIssue] = [
         issue
         for issue in _pre_fix_issues(mutation)
