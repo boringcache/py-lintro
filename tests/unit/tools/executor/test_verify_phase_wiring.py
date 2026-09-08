@@ -1,6 +1,6 @@
 """Executor-level tests for the mutate-then-verify wiring (#1743).
 
-The unit tests in ``tests/unit/utils/execution/test_verify_pass.py`` pin the
+The unit tests in ``tests/unit/tools/core/test_verify_pass.py`` pin the
 pass's own arithmetic. These pin the sequence ``execute_run`` puts it in, which
 is the part that can silently rot: the fingerprint snapshot has to be taken
 *before* the mutation phase, and the artifact's residual has to come from the
@@ -62,7 +62,7 @@ class _MutatingTool:
         self.definition = _FakeDefinition()
         self._target = target
         self._residual = residual
-        self.fixed_before_snapshot: bool | None = None
+        self.fix_calls = 0
         self.checked_paths: list[str] | None = None
 
     def set_options(self, **_kwargs: Any) -> None:
@@ -91,6 +91,7 @@ class _MutatingTool:
         Returns:
             ToolResult: A mutation result reporting no residual.
         """
+        self.fix_calls += 1
         self._target.write_text("x = 2\n", encoding="utf-8")
         return ToolResult(
             name="ruff",
@@ -362,9 +363,23 @@ def test_check_runs_no_verify_pass_and_takes_no_snapshot(
         profile=False,
     )
 
+    snapshots: list[Any] = []
+    monkeypatch.setattr(
+        verify_pass,
+        "snapshot_fingerprints",
+        lambda files: snapshots.append(files),
+    )
+
     artifact = _run_fmt(ctx=ctx, workspace=workspace)
 
     assert_that(target.read_text(encoding="utf-8")).is_equal_to("x = 1\n")
+    assert_that(tool.fix_calls).is_equal_to(0)
+    # Read-only means read-only: no fingerprints are taken at all, and the one
+    # configuration is the check itself rather than a check plus a verify.
+    assert_that(snapshots).is_empty()
+    assert_that([call["action"] for call in _executor_doubles]).is_equal_to(
+        [Action.CHECK],
+    )
     assert_that(tool.checked_paths).is_equal_to([str(workspace)])
     assert_that(artifact.total_issues).is_equal_to(3)
     assert_that(artifact.tool_results[0].capability).is_equal_to(Cap.CHECK)
@@ -392,8 +407,7 @@ def test_the_floor_of_an_incremental_run_stays_inside_that_runs_scope(
     workspace = tmp_path / "src"
     workspace.mkdir()
     target = _seed(workspace / "a.py")
-    untouched = workspace / "b.py"
-    untouched.write_text("y = 2\n", encoding="utf-8")
+    out_of_scope = _seed(workspace / "b.py")
     tool = _MutatingTool(target=target, residual=1)
     monkeypatch.setattr(tool_manager, "get_tool", lambda name: tool)
     # Only ``a.py`` changed since this tool's last run.
@@ -415,7 +429,63 @@ def test_the_floor_of_an_incremental_run_stays_inside_that_runs_scope(
         incremental=True,
     )
 
-    # The floor names the incremental candidates instead of re-widening to the
-    # scan root, so ``b.py`` is never handed to the verifying CHECK.
+    # ``b.py`` is outside this run's incremental scope but *is* a file the
+    # fingerprint layer would happily call changed, so a floor that re-widened
+    # to the scan root — or narrowing that ignored the incremental set — would
+    # put it in front of the CHECK. Neither does.
+    assert_that(out_of_scope.exists()).is_true()
     assert_that(tool.checked_paths).is_equal_to([str(target)])
     assert_that(artifact.total_remaining).is_equal_to(1)
+
+
+def test_a_dry_run_preview_stays_read_only(
+    monkeypatch: pytest.MonkeyPatch,
+    _executor_doubles: list[dict[str, Any]],
+    tmp_path: Path,
+    fake_logger: Any,
+) -> None:
+    """``format --dry-run`` is the one context where the two actions differ.
+
+    ``build_run_context`` selects the *fixable* tool set (``selection_action``
+    stays ``FIX``) but executes in check mode, so the gate on the snapshot has
+    to key off ``ctx.action``, not the selection. Building that shape here is
+    what stops a later refactor from keying off the wrong one and turning a
+    preview into a mutating run.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        _executor_doubles: Recorded configuration calls and gate doubles.
+        tmp_path: Temporary workspace.
+        fake_logger: Console logger double.
+    """
+    workspace = tmp_path / "src"
+    workspace.mkdir()
+    target = _seed(workspace / "a.py")
+    tool = _MutatingTool(target=target, residual=2)
+    monkeypatch.setattr(tool_manager, "get_tool", lambda name: tool)
+    snapshots: list[Any] = []
+    monkeypatch.setattr(
+        verify_pass,
+        "snapshot_fingerprints",
+        lambda files: snapshots.append(files),
+    )
+    ctx = RunContext(
+        action=Action.CHECK,
+        selection_action=Action.FIX,
+        dry_run_preview=True,
+        output_manager=_FakeOutputManager(tmp_path),
+        logger=fake_logger,
+        lintro_config=get_config(),
+        clean_stdout_output=True,
+        group_by="file",
+        profile=False,
+    )
+
+    _run_fmt(ctx=ctx, workspace=workspace)
+
+    assert_that(target.read_text(encoding="utf-8")).is_equal_to("x = 1\n")
+    assert_that(tool.fix_calls).is_equal_to(0)
+    assert_that(snapshots).is_empty()
+    assert_that([call["action"] for call in _executor_doubles]).is_equal_to(
+        [Action.CHECK],
+    )

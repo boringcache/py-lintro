@@ -154,7 +154,17 @@ def test_format_findings_are_recorded_as_issues_not_only_as_a_count(
     assert_that(
         [getattr(issue, "code", "") for issue in result.initial_issues or []],
     ).is_equal_to(["FORMAT", "FORMAT"])
-    # Paths are absolute so the verify pass can match them against the files
-    # it fingerprinted.
-    for issue in result.initial_issues or []:
-        assert_that(Path(issue.file).is_absolute()).is_true()
+    # Not merely absolute: joined against the directory ruff ran in, exactly
+    # the way execute_ruff_check canonicalises the same findings. The two go
+    # through one shared helper so a fix's initial_issues and a check's
+    # residual cannot key the same file under different names.
+    assert_that(
+        sorted(issue.file for issue in result.initial_issues or []),
+    ).is_equal_to(
+        sorted(
+            [
+                str(Path("/test/project") / "test.py"),
+                str(Path("/test/project") / "src" / "module.py"),
+            ],
+        ),
+    )

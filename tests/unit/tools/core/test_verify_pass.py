@@ -286,12 +286,14 @@ def test_resolve_verify_scope_falls_back_when_a_file_cannot_be_fingerprinted(
     missing = str(tmp_path / "gone.py")
     candidates = (str(real), missing)
 
-    baseline = VerifyBaseline(
-        candidates=candidates,
-        snapshot=snapshot_fingerprints(candidates),
-    )
+    snapshot = snapshot_fingerprints(candidates)
+    baseline = VerifyBaseline(candidates=candidates, snapshot=snapshot)
     scope = resolve_verify_scope(baseline)
 
+    # A snapshot with a failed stat is unreliable in its own right, not only
+    # when the caller happens to compare its length against the candidates.
+    assert_that(list(snapshot.unreadable)).is_equal_to([missing])
+    assert_that(snapshot.is_reliable).is_false()
     assert_that(scope.narrowed).is_false()
     assert_that(scope.floor_reason).is_equal_to(UNREADABLE_REASON)
     assert_that(list(scope.files)).is_equal_to(list(candidates))
@@ -685,18 +687,23 @@ def test_a_check_that_raises_a_programming_error_propagates(
         )
 
 
-def test_capture_verify_baseline_honours_the_runs_incremental_scope(
+@pytest.mark.parametrize("narrowing", ["incremental", "diff"])
+def test_capture_verify_baseline_honours_the_runs_own_narrowing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    narrowing: str,
 ) -> None:
-    """Under ``--incremental`` the floor is what this run could have touched.
+    """The floor is what *this* run could have touched, not the whole tree.
 
-    Without this the floor re-checks the whole tree and reports every
-    pre-existing diagnostic in it as the run's residual.
+    ``--incremental`` and ``--diff`` share the rule that stops the floor from
+    re-widening to the scan root, so both sides of it are exercised. Without
+    it the floor re-checks the whole tree and reports every pre-existing
+    diagnostic in it as the run's residual.
 
     Args:
         monkeypatch: pytest monkeypatch fixture.
         tmp_path: Temporary workspace.
+        narrowing: Which flag narrowed the run.
     """
     changed = tmp_path / "changed.py"
     unchanged = tmp_path / "unchanged.py"
@@ -712,18 +719,30 @@ def test_capture_verify_baseline_honours_the_runs_incremental_scope(
             ),
         },
     )
-    monkeypatch.setattr(
-        verify_pass,
-        "_incremental_subset",
-        lambda *, tool_name, files: [f for f in files if str(changed) == f],
-    )
+    if narrowing == "incremental":
+        monkeypatch.setattr(
+            verify_pass,
+            "_incremental_subset",
+            lambda *, tool_name, files: [f for f in files if str(changed) == f],
+        )
+        incremental = True
+        diff_base: str | None = None
+    else:
+        monkeypatch.setattr(
+            verify_pass,
+            "walk_files_with_excludes",
+            lambda **_kwargs: [str(changed)],
+        )
+        incremental = False
+        diff_base = "origin/main"
 
     baseline = capture_verify_baseline(
         tools_to_run=["black"],
         paths=[str(tmp_path)],
         exclude=None,
         include_venv=False,
-        incremental=True,
+        incremental=incremental,
+        diff_base=diff_base,
     )
 
     assert_that(list(baseline.candidates)).is_equal_to([str(changed)])
@@ -740,3 +759,70 @@ def test_capture_verify_baseline_honours_the_runs_incremental_scope(
             ).scan_targets,
         ),
     ).is_equal_to([str(changed)])
+
+
+def test_an_operational_check_failure_records_ran_false_and_the_run_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tool whose check dies is reported as unverified, not skipped.
+
+    ``ran=False`` is what makes the fold carry that tool's pre-fix findings
+    instead of believing its ``remaining=0``. One tool failing must not stop
+    the tools after it from being verified.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    claims = [Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})]
+    broken = _FakeTool(definition=_FakeDefinition(claims=claims))
+    healthy = _FakeTool(
+        definition=_FakeDefinition(claims=claims),
+        result=ToolResult(name="black", success=True, issues_count=0),
+    )
+    _register(monkeypatch, {"ruff": broken, "black": healthy})
+
+    def _configure(*, tool_name: str) -> VerifiableTool:
+        if tool_name == "ruff":
+            raise OSError("ruff binary vanished")
+        return cast("VerifiableTool", healthy)
+
+    outcomes = run_verify_pass(
+        tools_to_run=["ruff", "black"],
+        scope=VerifyScope(files=("/a.py",), narrowed=True),
+        configure=_configure,
+    )
+
+    assert_that([(o.tool, o.ran) for o in outcomes]).is_equal_to(
+        [("ruff", False), ("black", True)],
+    )
+    assert_that(outcomes[0].result).is_none()
+    # The tool after the failure still ran.
+    assert_that(healthy.seen_files).is_equal_to(["/a.py"])
+
+
+def test_every_fmt_tool_claims_exactly_what_it_discovers() -> None:
+    """Claims and discovery patterns must not drift apart.
+
+    The verify pass's candidate walk keys off ``claims``; a plugin's own
+    discovery keys off ``file_patterns``. ``capture_verify_baseline`` deliberately walks the claimed patterns rather
+    than calling ``discover_files`` (that path writes the incremental cache,
+    which must not happen before the mutation phase). This pins the assumption
+    that makes the duplication safe: for every tool that can mutate, the
+    patterns it claims are the patterns it discovers.
+    """
+    from lintro.tools import tool_manager
+
+    mismatched: dict[str, tuple[list[str], list[str]]] = {}
+    for name in tool_manager.get_fix_tools():
+        definition = tool_manager.get_tool(name).definition
+        claimed: set[str] = set()
+        for claim in getattr(definition, "claims", None) or ():
+            if claim.is_mutating:
+                claimed.update(claim.patterns)
+        if not claimed:
+            continue
+        discovered = set(definition.file_patterns or ())
+        if claimed != discovered:
+            mismatched[name] = (sorted(claimed), sorted(discovered))
+
+    assert_that(mismatched).is_equal_to({})

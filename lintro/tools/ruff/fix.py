@@ -11,7 +11,6 @@ ruff actually fixed. The counts are still filled in for callers that invoke
 ``fix()`` directly, outside the executor.
 """
 
-import os
 import subprocess  # nosec B404 - subprocess used safely to execute ruff commands with controlled input
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -31,6 +30,7 @@ from lintro.tools.core.timeout_utils import create_timeout_result
 # timeout (defined in lintro.tools.ruff.definition). Importing here preserves
 # the historical ``from ...ruff.fix import RUFF_DEFAULT_TIMEOUT`` entry point.
 from lintro.tools.ruff.definition import RUFF_DEFAULT_TIMEOUT
+from lintro.tools.ruff.paths import absolute_issue_paths
 
 if TYPE_CHECKING:
     from lintro.models.core.tool_result import ToolResult
@@ -79,26 +79,6 @@ def _temporary_option(
         elif option_key in tool.options:
             # Remove the key if it wasn't originally present
             del tool.options[option_key]
-
-
-def _absolute_paths(*, files: list[str], cwd: str | None) -> list[str]:
-    """Resolve ruff's reported paths against the directory it ran in.
-
-    Args:
-        files: Paths exactly as ruff printed them.
-        cwd: Working directory the command ran in.
-
-    Returns:
-        Absolute paths, so the verify pass can match them against the files it
-        fingerprinted.
-    """
-    resolved: list[str] = []
-    for path in files:
-        if cwd and not os.path.isabs(path):
-            resolved.append(os.path.abspath(os.path.join(cwd, path)))
-        else:
-            resolved.append(path)
-    return resolved
 
 
 def execute_ruff_fix(
@@ -219,7 +199,7 @@ def execute_ruff_fix(
         # the pass cannot run.
         initial_issues.extend(
             RuffFormatIssue(file=path)
-            for path in _absolute_paths(files=format_files, cwd=ctx.cwd)
+            for path in absolute_issue_paths(files=format_files, cwd=ctx.cwd)
         )
 
     # Track initial totals separately for accurate fixed/remaining math
