@@ -1065,7 +1065,56 @@ CLI flags always override config: passing `--fix` on the CLI turns it on even if
 
 ### Providers
 
-#### [Anthropic](https://docs.anthropic.com/) (default)
+Every provider fact below — defaults, transports, the API-key variable, the CLI binary
+and the per-model prices — is declared once, in that provider's plugin metadata
+(`lintro/ai/providers/<name>/metadata.py`), and read everywhere else through
+`lintro.ai.registry`. The two tables below are snapshots of that metadata, asserted cell
+by cell by `tests/unit/ai/providers/test_docs_provider_table.py`, so they cannot drift
+from the code. There is no code generator, so updating them is two steps: change the
+metadata, then run that test and paste the SNAPSHOT block it prints between the markers.
+CI runs the same test, so a metadata change without the paste-back fails the build.
+
+<!-- BEGIN SNAPSHOT: provider-table -->
+
+| Provider  | Default model       | API key env         | Transports             | CLI binary |
+| --------- | ------------------- | ------------------- | ---------------------- | ---------- |
+| Anthropic | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` | `api` (default), `cli` | `claude`   |
+| OpenAI    | `gpt-4o`            | `OPENAI_API_KEY`    | `api` (default), `cli` | `codex`    |
+| Cursor    | `auto`              | `CURSOR_API_KEY`    | `cli` (default)        | `agent`    |
+
+<!-- END SNAPSHOT: provider-table -->
+
+`(default)` marks the transport lintro documents and `lintro doctor` steers you to; it
+is **not** a fallback for an omitted `ai.transport`. That fallback is `api` for every
+provider, Cursor included — which is why leaving `ai.transport` unset with
+`provider: cursor` fails with `cursor provider only supports transport: cli`. Set
+`ai.transport` explicitly.
+
+Prices are USD per million tokens, as lintro uses them for `ai.max_cost_usd` and the
+reported `$` figures. A model priced at zero is billed elsewhere (the Cursor
+subscription); `estimate_cost_with_floor` gives those calls a non-zero estimate so a
+_flag or env_ cap can still stop the run. It does not make a committed YAML cap
+enforceable on an `unpriceable` transport — see the Cursor section below.
+
+<!-- BEGIN SNAPSHOT: model-pricing-table -->
+
+| Provider  | Model                       | Input  | Output |
+| --------- | --------------------------- | ------ | ------ |
+| Anthropic | `claude-sonnet-4-6`         | $3.00  | $15.00 |
+| Anthropic | `claude-sonnet-4-20250514`  | $3.00  | $15.00 |
+| Anthropic | `claude-haiku-4-5-20251001` | $0.80  | $4.00  |
+| Anthropic | `claude-opus-4-20250514`    | $15.00 | $75.00 |
+| OpenAI    | `gpt-4o`                    | $2.50  | $10.00 |
+| OpenAI    | `gpt-4o-mini`               | $0.15  | $0.60  |
+| OpenAI    | `gpt-4-turbo`               | $10.00 | $30.00 |
+| OpenAI    | `o1`                        | $15.00 | $60.00 |
+| OpenAI    | `o1-mini`                   | $1.10  | $4.40  |
+| Cursor    | `auto`                      | $0.00  | $0.00  |
+| Cursor    | `gpt-5.3-codex-fast`        | $0.00  | $0.00  |
+
+<!-- END SNAPSHOT: model-pricing-table -->
+
+#### [Anthropic](https://docs.anthropic.com/)
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -1095,6 +1144,36 @@ ai:
 See the [OpenAI API docs](https://platform.openai.com/docs/api-reference/) for model
 options and pricing.
 
+#### [Cursor](https://docs.cursor.com/en/cli/overview)
+
+```bash
+export CURSOR_API_KEY=...
+```
+
+```yaml
+ai:
+  provider: cursor
+  transport: cli # cursor is CLI-only
+  # model: auto  # default
+```
+
+The `agent` CLI bills against a Cursor subscription rather than per token, so its models
+are priced at zero above and the run's cost basis is `unpriceable`
+(`lintro/ai/transport.py`). What that means for `ai.max_cost_usd` depends on where the
+cap was set (`cap_is_enforced` in `lintro/ai/review/cost_cap.py`, #2154):
+
+- `--max-cost-usd` or `LINTRO_AI_MAX_COST_USD` — **enforced**. Operator intent for this
+  run enforces on every cost basis, and `estimate_cost_with_floor` is what gives the
+  budget a non-zero number to count against.
+- `ai.max_cost_usd` in committed YAML — **display-only for `lintro review`**. Committed
+  policy is transport-unaware and enforces only where real money is at stake (`billed`
+  or `estimated`), so `run_planning.py` builds the review's `CostBudget` with
+  `max_cost_usd=None` and the reported `$` figure is a shadow estimate, not a ceiling.
+  This is the review path only: the AI lint sessions behind `lintro chk` / `fmt` build
+  `CostBudget(max_cost_usd=ai_config.max_cost_usd)` unconditionally
+  (`lintro/ai/orchestrator.py`), so a YAML cap does stop those, priced off the same
+  fallback estimate.
+
 #### Measuring a provider choice
 
 Provider and model choice changes what a review finds. The offline eval in
@@ -1118,9 +1197,11 @@ Timeouts, cost caps, failure vocabulary, and the meaning of reported `$` figures
 decision table and `ai.transports.*` profiles (#1923).
 
 `ai.transport` has **no default**, so set it explicitly whenever `ai.lint` or
-`ai.review` is enabled. Omitting it is not fatal: `lintro doctor` reports the config as
-incompatible, and the provider factory falls back to `api` so an existing run keeps
-working. That fallback exists for backward compatibility — legacy configs that set only
+`ai.review` is enabled. Omitting it is always a `lintro doctor` incompatibility. Whether
+the run then still works depends on the provider: the factory falls back to `api` for
+every provider, which keeps `anthropic` and `openai` going but is **fatal for
+`cursor`**, where it surfaces as `cursor provider only supports transport: cli`. That
+fallback exists for backward compatibility — legacy configs that set only
 `ai.enabled: true` (which implicitly switches `lint` and `review` on) rely on it — and
 is not something to depend on in new config.
 

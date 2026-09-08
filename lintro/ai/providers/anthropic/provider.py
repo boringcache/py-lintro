@@ -28,11 +28,15 @@ from lintro.ai.exceptions import (
     AIRateLimitError,
 )
 from lintro.ai.json_response import CliSchemaRequest
+from lintro.ai.provider_enum import AIProvider
 from lintro.ai.providers._api_common import (
     ApiStreamingProvider,
     finish_api_completion,
 )
-from lintro.ai.providers.anthropic.metadata import ANTHROPIC_CLI_BINARY
+from lintro.ai.providers.anthropic.metadata import (
+    ANTHROPIC_CLI_BINARY,
+    ANTHROPIC_METADATA,
+)
 from lintro.ai.providers.base import (
     AIResponse,
     AsyncAIStreamResult,
@@ -51,7 +55,6 @@ from lintro.ai.raw_response import (
     describe_raw_response,
     recover_prose_envelope,
 )
-from lintro.ai.registry import PROVIDERS, AIProvider
 from lintro.ai.transcript import TranscriptDirection, log_transcript_event
 
 _has_anthropic = False
@@ -62,8 +65,8 @@ try:
 except ImportError:
     pass
 
-DEFAULT_MODEL = PROVIDERS.anthropic.default_model
-DEFAULT_API_KEY_ENV = PROVIDERS.anthropic.default_api_key_env
+DEFAULT_MODEL = ANTHROPIC_METADATA.default_model
+DEFAULT_API_KEY_ENV = ANTHROPIC_METADATA.default_api_key_env
 _CLAUDE_BIN = ANTHROPIC_CLI_BINARY
 
 
@@ -108,7 +111,7 @@ class _AnthropicCliTransport(CliTransport):
     ) -> None:
         super().__init__(
             binary_path=binary_path,
-            binary_name="Claude",
+            binary_name=cli_contract_for(AIProvider.ANTHROPIC).display_name,
             install_hint="Install Claude Code: https://code.claude.com/docs/en/setup",
             api_key_env=DEFAULT_API_KEY_ENV,
             contract=cli_contract_for(AIProvider.ANTHROPIC),
