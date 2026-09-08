@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from lintro.cli_utils.commands.config_ai import print_ai_config
 from lintro.cli_utils.commands.init import init_command
 from lintro.config import LintroConfig, get_config
 from lintro.config.config_validator import ValidationResult, validate_config_file
@@ -619,6 +620,9 @@ def _output_rich(
 
     console.print(exec_table)
     console.print()
+
+    # AI Section
+    print_ai_config(console=console, config=config)
 
     # Tool Execution Order Section
     tool_names = _get_all_tool_names()

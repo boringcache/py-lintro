@@ -349,6 +349,10 @@ def test_command_consistency() -> None:
 # documented execution keys, and the SECURITY.md supported-version table.
 # ---------------------------------------------------------------------------
 
+#: Prefix of the per-provider block overrides (#2309). Every documented
+#: spelling under it is checked against this one entry rather than listed.
+_AI_PROVIDER_BLOCK_ENV_PREFIX = "LINTRO_AI_PROVIDERS__"
+
 # Env vars the docs are allowed to advertise: they MUST be read by the runtime.
 _DOCUMENTED_LINTRO_ENV_VARS = {
     "LINTRO_LOG_DIR",
@@ -364,6 +368,10 @@ _DOCUMENTED_LINTRO_ENV_VARS = {
     "LINTRO_AI_ENABLED",
     "LINTRO_AI_REVIEW",
     "LINTRO_AI_MAX_COST_USD",
+    # A family, not a single variable: the runtime reads any
+    # LINTRO_AI_PROVIDERS__<PROVIDER>__<FIELD> whose provider and field a
+    # plugin declares (#2309), so the prefix is what the source can name.
+    _AI_PROVIDER_BLOCK_ENV_PREFIX,
 }
 
 # Env vars that were historically documented but are NOT read by the runtime.
@@ -424,12 +432,20 @@ def test_documented_env_vars_are_handled() -> None:
     documented -= {"LINTRO_PLUGIN_API_VERSION"}
 
     for var in documented:
+        # A LINTRO_AI_PROVIDERS__<PROVIDER>__<FIELD> spelling is one member of
+        # a family the runtime reads by prefix, so it is checked against the
+        # prefix rather than listed variable by variable.
+        checked = (
+            _AI_PROVIDER_BLOCK_ENV_PREFIX
+            if var.startswith(_AI_PROVIDER_BLOCK_ENV_PREFIX)
+            else var
+        )
         assert_that(_DOCUMENTED_LINTRO_ENV_VARS).described_as(
             f"{var} documented in configuration.md must be an allowed env var",
-        ).contains(var)
+        ).contains(checked)
         assert_that(source_text).described_as(
             f"{var} must be referenced in lintro/ source",
-        ).contains(var)
+        ).contains(checked)
 
     # Phantom vars must not have crept back into the docs.
     for var in _PHANTOM_LINTRO_ENV_VARS:

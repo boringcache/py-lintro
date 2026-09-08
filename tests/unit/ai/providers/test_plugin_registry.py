@@ -22,6 +22,7 @@ from lintro.ai.exceptions import (
     AIProviderRegistrationError,
 )
 from lintro.ai.model_pricing import ModelPricing
+from lintro.ai.provider_config import ProviderConfig
 from lintro.ai.provider_enum import AIProvider
 from lintro.ai.providers.protocol import (
     PROVIDER_PLUGIN_API_VERSION,
@@ -90,12 +91,14 @@ class _FakePlugin:
         name: Provider identity used as the registry key.
         transports: Transports this fake claims to serve.
         metadata: Static description of the fake provider.
+        config_model: Model for this fake's ``ai.providers.<name>`` block.
         built: Models this plugin was asked to build, in call order.
     """
 
     name: AIProvider = AIProvider.ANTHROPIC
     transports: frozenset[AITransport] = frozenset({AITransport.API})
     metadata: ProviderMetadata = _metadata_for(AIProvider.ANTHROPIC)
+    config_model: type[ProviderConfig] = ProviderConfig
     built: list[str | None] = field(default_factory=list)
 
     def build(self, config: AIConfig) -> BaseAIProvider:

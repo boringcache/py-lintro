@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from lintro.ai.config import AIConfig
     from lintro.ai.enums import AITransport
     from lintro.ai.model_pricing import ModelPricing
+    from lintro.ai.provider_config import ProviderConfig
     from lintro.ai.provider_enum import AIProvider
     from lintro.ai.providers.base import BaseAIProvider
     from lintro.ai.providers.cli_auth_probe import CliAuthProbe
@@ -226,11 +227,28 @@ class ProviderPlugin(Protocol):
         """
         ...  # pragma: no cover - protocol declaration
 
+    @property
+    def config_model(self) -> type[ProviderConfig]:
+        """Return the model for this provider's ``ai.providers.<name>`` block.
+
+        Provider-only knobs are declared on this model rather than on
+        :class:`~lintro.ai.config.AIConfig`, so the resolver can build and
+        validate a vendor's block without a central table of which key belongs
+        to whom (#2309). A provider with no vendor-specific knob returns an
+        empty subclass rather than None, so callers never branch on absence.
+
+        Returns:
+            The provider's :class:`~lintro.ai.provider_config.ProviderConfig`
+            subclass.
+        """
+        ...  # pragma: no cover - protocol declaration
+
     def build(self, config: AIConfig) -> BaseAIProvider:
         """Construct the provider instance described by *config*.
 
         The plugin reads whatever fields it needs off the effective config —
-        including provider-specific knobs — so the caller never assembles a
+        shared fields directly, vendor-only knobs from its own
+        ``ai.providers.<name>`` block — so the caller never assembles a
         per-vendor keyword list. Transcript setup, workspace resolution, and
         every other cross-cutting concern stay with the caller.
 
