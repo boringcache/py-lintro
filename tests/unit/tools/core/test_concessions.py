@@ -202,3 +202,55 @@ def test_apply_format_concessions_leaves_the_owner_alone() -> None:
     )
 
     assert_that(filtered.issues_count).is_equal_to(1)
+
+
+def test_a_fully_conceded_result_stops_failing_the_run() -> None:
+    """A red build with an empty table is what the concession prevents."""
+    result = ToolResult(
+        name="ruff",
+        success=False,
+        issues_count=1,
+        issues=[_Issue(code="E501")],
+    )
+
+    filtered = apply_suppressions(result=result, codes=frozenset({"E501"}))
+
+    assert_that(filtered.success).is_true()
+
+
+def test_a_partly_conceded_result_still_fails_the_run() -> None:
+    """Something real is still on the table, so the run stays red."""
+    result = ToolResult(
+        name="ruff",
+        success=False,
+        issues_count=2,
+        issues=[_Issue(code="E501"), _Issue(code="F401")],
+    )
+
+    filtered = apply_suppressions(result=result, codes=frozenset({"E501"}))
+
+    assert_that(filtered.success).is_false()
+
+
+def test_the_initial_count_follows_the_initial_list_not_the_issue_list() -> None:
+    """Ruff reports the pre-fix set separately; the two must not be conflated."""
+    result = ToolResult(
+        name="ruff",
+        success=False,
+        issues_count=1,
+        issues=[_Issue(code="E501")],
+        initial_issues=[
+            _Issue(code="E501"),
+            _Issue(code="E501"),
+            _Issue(code="F401"),
+        ],
+        initial_issues_count=3,
+        fixed_issues_count=2,
+        remaining_issues_count=1,
+    )
+
+    filtered = apply_suppressions(result=result, codes=frozenset({"E501"}))
+
+    assert_that(filtered.initial_issues_count).is_equal_to(1)
+    assert_that(filtered.remaining_issues_count).is_equal_to(0)
+    assert_that(filtered.fixed_issues_count).is_equal_to(1)

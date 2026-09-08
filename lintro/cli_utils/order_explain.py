@@ -115,16 +115,21 @@ def format_authority_section(authority: FormatAuthority) -> list[str]:
 
     Only contested patterns are listed. An uncontested pattern has an owner
     too, but printing forty of them would bury the two decisions that were
-    actually made.
+    actually made. An ``authority.format`` entry that could not be applied is
+    always listed, contest or not: an override is ignored whenever its tool
+    cannot own the pattern, which has nothing to do with whether anything
+    contested it, and dropping it silently is the failure the record exists
+    to prevent.
 
     Args:
         authority: Resolved format authority for the tool selection.
 
     Returns:
-        Plain-text lines, empty when no pattern was contested.
+        Plain-text lines, empty when no pattern was contested and every
+        override applied.
     """
     contested = authority.contested_patterns
-    if not contested:
+    if not contested and not authority.ignored_overrides:
         return []
     lines = [f"  {AUTHORITY_HEADER}"]
     for pattern in contested:
@@ -136,7 +141,7 @@ def format_authority_section(authority: FormatAuthority) -> list[str]:
         )
     lines.extend(f"    demoted {demotion.summary}" for demotion in authority.demotions)
     lines.extend(
-        f"    ignored authority.format {pattern}: {tool} does not format {pattern}"
+        f"    ignored authority.format {pattern}: {tool} cannot own FORMAT there"
         for pattern, tool in authority.ignored_overrides
     )
     return lines

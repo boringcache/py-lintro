@@ -1001,11 +1001,15 @@ To pick a different owner:
 ```yaml
 authority:
   format:
-    '*.py': ruff
+    '*.css': prettier
 ```
 
-An entry naming a tool that does not claim `FORMAT` on that pattern is reported and
-ignored rather than obeyed: obeying it would leave the pattern with no formatter at all.
+An entry is reported and ignored rather than obeyed in two cases: when it names a tool
+that does not claim `FORMAT` on that pattern, and when the tool it would demote has no
+formatting stage lintro can switch off. Obeying either would leave the pattern with no
+formatter, or with two — the state this section exists to prevent. Today only ruff has
+such a stage, so `authority.format` cannot yet move Python away from black; the entry is
+reported as ignored instead of silently doing nothing.
 
 Every demotion is disclosed in the run summary, and `lintro check --explain-order` and
 `lintro doctor` name the owner, the tools it beat, and how it was chosen.
@@ -1026,7 +1030,12 @@ exists, and hand-authored suppression only as a fallback:
 A concession applies only when its owner is actually in the run: with prettier
 deselected, html-validate keeps its own `recommended` preset. The
 `html-validate:prettier` preset is skipped when the project ships its own
-`.htmlvalidate.*`, because a user config is the user's decision.
+`.htmlvalidate.*` in the run directory or any ancestor of it, because a user config is
+the user's decision.
+
+html-validate takes one `--preset` per invocation, so that concession is invocation-wide
+even though prettier owns only `*.html`: while prettier is selected, `*.htm`, `*.vue`
+and `*.svelte` lose the same five stylistic rules.
 
 Every `(owner, yielder, filetype)` triple is guarded by a round-trip fixture test in
 `tests/integration/test_format_concessions.py`: format a fixture with the owner, run the

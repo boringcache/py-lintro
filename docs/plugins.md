@@ -240,7 +240,7 @@ by the two orthogonal scope booleans instead:
 Ordering per pattern is `FIX` → `FORMAT` → `CHECK`, and at most one tool may hold
 `FORMAT` for a given pattern — resolved by the owner table and rule (d) in
 `lintro/tools/core/authority.py`, with the loser **demoted rather than dropped** (issue
-#1744). A new tool that claims `FORMAT` on a pattern another tool already claims needs a
+1744). A new tool that claims `FORMAT` on a pattern another tool already claims needs a
 row in that table, and a concession row in `lintro/tools/core/concessions.py` with a
 round-trip fixture test if it also _checks_ a pattern it does not own. See
 [Format authority](configuration.md#format-authority). This derivation **is** execution

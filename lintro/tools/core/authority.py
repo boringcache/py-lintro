@@ -325,6 +325,46 @@ def _rule_d_winner(candidates: Mapping[str, int]) -> str:
     return min(sorted(candidates), key=lambda tool: (candidates[tool], tool))
 
 
+def rule_d_owners(
+    claims_by_tool: Mapping[str, Sequence[Claim]],
+) -> dict[str, str]:
+    """Return the rule (d) winner for every ``FORMAT``-claimed pattern.
+
+    Rule (d) alone, with neither the owner table nor a config override
+    consulted. That is what makes it usable as the *independent* answer the
+    owner table is checked against: comparing a row to
+    :func:`resolve_format_authority`, which reads the table, could only ever
+    agree with itself.
+
+    Args:
+        claims_by_tool: Claims keyed by tool name.
+
+    Returns:
+        Mapping of pattern to the tool with the fewest mutating capabilities.
+    """
+    return {
+        pattern: _rule_d_winner(candidates)
+        for pattern, candidates in _format_claimants(claims_by_tool).items()
+    }
+
+
+def _is_demotable(tool: str) -> bool:
+    """Report whether losing ``FORMAT`` can actually be enforced on a tool.
+
+    Demotion is applied by switching a tool's formatting stage off, so a tool
+    with no entry in :data:`FORMAT_DEMOTION_OPTIONS` cannot be demoted at all:
+    naming its rival as owner would leave *both* formatting the pattern, the
+    exact failure this module exists to prevent.
+
+    Args:
+        tool: Registry name of the tool.
+
+    Returns:
+        True when the tool has a formatting stage lintro can switch off.
+    """
+    return tool.lower() in FORMAT_DEMOTION_OPTIONS
+
+
 def _resolve_owner(
     *,
     pattern: str,
@@ -342,19 +382,27 @@ def _resolve_owner(
 
     Returns:
         ``(owner, source, override_ignored)``. ``override_ignored`` is True
-        when an override named this pattern but its tool does not claim
-        ``FORMAT`` here, so the override was not applied.
+        when an override named this pattern but could not be applied — either
+        its tool does not claim ``FORMAT`` here, or the tool it would demote
+        has no formatting stage to switch off.
     """
     override = overrides.get(pattern)
+    override_ignored = False
     if override is not None:
-        if override in candidates:
+        losers = [tool for tool in candidates if tool != override]
+        if override in candidates and all(_is_demotable(t) for t in losers):
             return override, OwnerSource.CONFIG, False
-        return _rule_d_winner(candidates), OwnerSource.RULE, True
+        # Two ways an override cannot be applied: it names a tool that does
+        # not format the pattern at all, or the tool it would demote has no
+        # formatting stage lintro can switch off. Obeying either would leave
+        # the pattern with two active formatters, so both fall through to the
+        # rest of the chain and are reported instead.
+        override_ignored = True
 
     row_owner = table.get(pattern)
     if row_owner is not None and row_owner in candidates:
-        return row_owner, OwnerSource.TABLE, False
-    return _rule_d_winner(candidates), OwnerSource.RULE, False
+        return row_owner, OwnerSource.TABLE, override_ignored
+    return _rule_d_winner(candidates), OwnerSource.RULE, override_ignored
 
 
 def resolve_format_authority(
@@ -492,18 +540,17 @@ def authority_summary_lines(authority: FormatAuthority) -> list[str]:
         authority: The resolved authority.
 
     Returns:
-        Plain-text lines, empty when nothing was demoted. Authority is only
-        worth announcing when it actually took something away — an
-        uncontested run says nothing.
+        Plain-text lines, empty when nothing was demoted and no override was
+        dropped. Authority is worth announcing when it took something away,
+        or when it could not do what the config asked; an uncontested run
+        with no override says nothing.
     """
-    if not authority.demotions:
+    if not authority.demotions and not authority.ignored_overrides:
         return []
     lines = ["Format authority: one tool owns FORMAT per pattern (#1744)"]
     lines.extend(f"  {demotion.summary}" for demotion in authority.demotions)
-    if authority.ignored_overrides:
-        lines.extend(
-            f"  ignored authority.format {pattern}: {tool} does not "
-            f"format {pattern}"
-            for pattern, tool in authority.ignored_overrides
-        )
+    lines.extend(
+        f"  ignored authority.format {pattern}: {tool} cannot own " f"FORMAT there"
+        for pattern, tool in authority.ignored_overrides
+    )
     return lines

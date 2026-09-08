@@ -22,6 +22,7 @@ from assertpy import assert_that
 
 from lintro.tools.black.definition import BlackPlugin
 from lintro.tools.core.concessions import (
+    CONCESSIONS,
     RUFF_FORMATTER_CONFLICT_CODES,
     apply_suppressions,
 )
@@ -99,16 +100,28 @@ def test_prettier_output_passes_html_validate(tmp_path: Path) -> None:
 def test_prettier_output_passes_stylelint(tmp_path: Path) -> None:
     """Prettier owns ``*.css``; stylelint has no layout rules left to raise.
 
+    The control here is prettier itself: the fixture is deliberately
+    unformatted, so the assertion that its bytes changed proves the owner ran
+    and rewrote layout. Stylelint reporting nothing against that rewrite is
+    then the claim under test — and ``skipped`` is checked because a
+    stylelint that never ran also reports zero.
+
     Args:
         tmp_path: Temporary project directory.
     """
     shutil.copy(STYLELINT_CONFIG, tmp_path / ".stylelintrc.json")
     target = _stage("prettier_stylelint.css", tmp_path)
+    before = target.read_text(encoding="utf-8")
     PrettierPlugin().fix([str(target)], {})
 
     result = StylelintPlugin().check([str(target)], {})
 
+    assert_that(target.read_text(encoding="utf-8")).is_not_equal_to(before)
+    assert_that(result.skipped).is_false()
     assert_that(result.issues_count).is_equal_to(0)
+    assert_that(
+        next(c for c in CONCESSIONS if c.yielder == "stylelint").suppressed_codes,
+    ).is_empty()
 
 
 @require_tool("black")

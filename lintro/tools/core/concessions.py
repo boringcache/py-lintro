@@ -15,8 +15,11 @@ as a fallback:
 - **html-validate yields to prettier.** ``html-validate:prettier`` is an
   official preset that exists to turn off exactly the rules prettier
   contradicts. It is applied only when the project ships no
-  ``.htmlvalidate.*``: a user config is the user's decision and lintro does
-  not override it.
+  ``.htmlvalidate.*`` in the run directory or above it: a user config is the
+  user's decision and lintro does not override it. html-validate takes one
+  ``--preset`` per invocation, so this concession is invocation-wide even
+  though prettier owns only ``*.html`` — ``*.htm``, ``*.vue`` and
+  ``*.svelte`` lose the same stylistic rules while prettier is selected.
 - **ruff yields to black.** Ruff has no preset, but it publishes the list of
   lint rules that conflict with a formatter, and that published list is what
   :data:`RUFF_FORMATTER_CONFLICT_CODES` holds. ``E501`` joins it because
@@ -216,12 +219,20 @@ def apply_suppressions(
 ) -> ToolResult:
     """Drop conceded diagnostics from a result and rebalance its counts.
 
-    The FIX-mode convention is that remaining issues occupy the tail of
-    ``issues``, so removals are split into "was going to be reported as
-    remaining" and "was already counted as fixed" and both standardized
-    counts move together. Getting that wrong trips ``ToolResult``'s own
-    ``initial = fixed + remaining`` validation, which is the point of doing
-    it here once rather than in each caller.
+    Three things have to move together, or the result becomes incoherent:
+
+    * **The remaining count.** The FIX-mode convention is that remaining
+      issues occupy the tail of ``issues``, so only removals from that tail
+      reduce it.
+    * **The initial count.** ``initial_issues`` is a *different* list from
+      ``issues`` on the tools that populate both (ruff reports remaining in
+      ``issues`` and the pre-fix set in ``initial_issues``), so it is
+      decremented by its own removals. ``fixed`` is then derived rather than
+      adjusted, which is what keeps ``initial = fixed + remaining`` — the
+      invariant ``ToolResult.__post_init__`` raises on.
+    * **Success.** A check tool sets ``success=False`` because it *found*
+      something. When the only things it found were conceded, the run must
+      not still go red on a finding nobody is allowed to report.
 
     Args:
         result: The result to filter.
@@ -243,28 +254,38 @@ def apply_suppressions(
         "issues": kept,
         "issues_count": max(result.issues_count - dropped, 0),
     }
-    if result.initial_issues:
-        changes["initial_issues"] = [
+
+    dropped_initial = dropped
+    if result.initial_issues is not None:
+        initial_kept = [
             issue for issue in result.initial_issues if _issue_code(issue) not in codes
         ]
-    if result.remaining_issues_count is not None:
-        tail = issues[len(issues) - result.remaining_issues_count :]
-        dropped_remaining = sum(1 for i in tail if _issue_code(i) in codes)
-        remaining = max(result.remaining_issues_count - dropped_remaining, 0)
+        dropped_initial = len(result.initial_issues) - len(initial_kept)
+        changes["initial_issues"] = initial_kept
+
+    remaining = result.remaining_issues_count
+    if remaining is not None:
+        tail = issues[len(issues) - remaining :]
+        remaining = max(remaining - sum(1 for i in tail if _issue_code(i) in codes), 0)
         changes["remaining_issues_count"] = remaining
         # In fix mode ``issues_count`` mirrors the remaining count, so it
         # follows that number rather than the raw list length.
         changes["issues_count"] = remaining
-        if result.fixed_issues_count is not None:
-            changes["fixed_issues_count"] = max(
-                result.fixed_issues_count - (dropped - dropped_remaining),
-                0,
-            )
+
     if result.initial_issues_count is not None:
-        changes["initial_issues_count"] = max(
-            result.initial_issues_count - dropped,
-            0,
-        )
+        initial = max(result.initial_issues_count - dropped_initial, 0)
+        changes["initial_issues_count"] = initial
+        if result.fixed_issues_count is not None:
+            # Derived, never adjusted: fixed is whatever is left of the
+            # initial set once the residual is accounted for.
+            changes["fixed_issues_count"] = max(initial - (remaining or 0), 0)
+
+    if not kept and not result.timed_out and not result.success:
+        # Every finding was conceded, so the tool ran fine and has nothing to
+        # report. Leaving success=False would fail the run on diagnostics the
+        # concession exists to retire, with an empty table to explain it.
+        changes["success"] = True
+
     return dataclasses.replace(result, **changes)  # type: ignore[arg-type]
 
 

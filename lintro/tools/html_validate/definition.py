@@ -25,9 +25,17 @@ three the other way, so a run that let prettier format ``*.html`` then failed
 the file it had just formatted. When prettier owns ``*.html`` for ``FORMAT``
 (#1744) the executor sets ``concession_preset``, and the recommended preset is
 joined by the official ``prettier`` preset, which exists to switch exactly
-those rules off. A project that ships its own ``.htmlvalidate.*`` is left
-alone: a user config is the user's decision, and html-validate ignores
-``--preset`` once one is present anyway.
+those rules off. A project that ships its own ``.htmlvalidate.*`` — in the
+run directory or any ancestor of it — is left alone: a user config is the
+user's decision, and html-validate ignores ``--preset`` once one is present
+anyway.
+
+html-validate takes one ``--preset`` per invocation, so the concession is
+invocation-wide even though prettier owns only ``*.html``: while prettier is
+selected, ``*.htm``, ``*.vue`` and ``*.svelte`` lose the same five stylistic
+rules. Splitting the run to scope it per pattern would cost an extra process
+per batch to protect rules that describe markup layout in files whose layout
+no lintro tool then owns; the trade is recorded here rather than hidden.
 """
 
 from __future__ import annotations
@@ -169,11 +177,18 @@ class HtmlValidatePlugin(BaseToolPlugin):
         """
         if not preset:
             return []
-        root = Path(cwd) if cwd else Path.cwd()
-        if any(
-            (root / filename).exists() for filename in HTML_VALIDATE_CONFIG_FILENAMES
-        ):
-            return []
+        # ``cwd`` is the common parent of *this batch's* files, not the
+        # project root, and html-validate resolves its own config by walking
+        # up from each file. Checking only ``cwd`` would miss a root-level
+        # ``.htmlvalidate.json`` whenever the HTML lives in a subdirectory,
+        # and would then force a preset over the config the user wrote.
+        start = Path(cwd) if cwd else Path.cwd()
+        for directory in (start, *start.parents):
+            if any(
+                (directory / filename).exists()
+                for filename in HTML_VALIDATE_CONFIG_FILENAMES
+            ):
+                return []
         return ["--preset", f"{HTML_VALIDATE_DEFAULT_PRESET},{preset}"]
 
     @staticmethod

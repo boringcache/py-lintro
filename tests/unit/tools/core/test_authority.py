@@ -17,10 +17,12 @@ from lintro.models.core.claim import Claim
 from lintro.tools import tool_manager
 from lintro.tools.core.authority import (
     FORMAT_OWNER_TABLE,
+    FormatOwnerRow,
     OwnerSource,
     authority_summary_lines,
     demotion_options,
     resolve_format_authority,
+    rule_d_owners,
 )
 
 _RUFF_CLAIMS = [Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.FORMAT, Cap.CHECK})]
@@ -83,14 +85,16 @@ def test_an_uncontested_pattern_still_has_an_owner() -> None:
 
 def test_a_config_override_picks_the_owner() -> None:
     """``authority.format`` outranks both the table and rule (d)."""
+    demotable = [
+        Claim(patterns=["*.q"], capabilities={Cap.FIX, Cap.FORMAT}),
+    ]
     authority = resolve_format_authority(
-        claims_by_tool=_PY_CONTEST,
-        overrides={"*.py": "ruff"},
+        claims_by_tool={"ruff": demotable, "black": _BLACK_CLAIMS},
+        overrides={"*.q": "ruff"},
     )
 
-    assert_that(authority.owner_of("*.py")).is_equal_to("ruff")
-    assert_that(authority.owners["*.py"].source).is_equal_to(OwnerSource.CONFIG)
-    assert_that(authority.demotion_for("black")).is_not_none()
+    assert_that(authority.owner_of("*.q")).is_equal_to("ruff")
+    assert_that(authority.owners["*.q"].source).is_equal_to(OwnerSource.CONFIG)
 
 
 def test_an_override_naming_a_non_formatter_is_ignored_and_reported() -> None:
@@ -164,19 +168,73 @@ def test_every_contested_pattern_has_an_owner_table_row() -> None:
 
 
 def test_owner_table_rows_that_diverge_from_rule_d_state_a_reason() -> None:
-    """A divergence without a stated reason is how the last table rotted."""
-    claims = {
-        name: list(getattr(tool.definition, "claims", None) or ())
-        for name, tool in tool_manager.get_all_tools().items()
-    }
-    by_rule = resolve_format_authority(claims_by_tool=claims, overrides={})
+    """A divergence without a stated reason is how the last table rotted.
+
+    Compared against ``rule_d_owners``, which does not read the table:
+    checking a row against the full resolver would only prove the resolver
+    reads the row.
+    """
+    by_rule = rule_d_owners(
+        {
+            name: list(getattr(tool.definition, "claims", None) or ())
+            for name, tool in tool_manager.get_all_tools().items()
+        },
+    )
     divergent_without_reason = [
         row.pattern
         for row in FORMAT_OWNER_TABLE
-        if row.owner != by_rule.owner_of(row.pattern) and not row.reason
+        if row.owner != by_rule.get(row.pattern) and not row.reason
     ]
 
     assert_that(divergent_without_reason).is_empty()
+
+
+def test_the_divergence_guard_can_actually_fail() -> None:
+    """The guard is only worth having if a bad row would trip it."""
+    by_rule = rule_d_owners(_PY_CONTEST)
+
+    assert_that(by_rule["*.py"]).is_equal_to("black")
+    assert_that(FormatOwnerRow(pattern="*.py", owner="ruff").reason).is_empty()
+
+
+def test_an_unenforceable_override_is_ignored() -> None:
+    """Naming ruff owner would leave black formatting too, so it is dropped."""
+    authority = resolve_format_authority(
+        claims_by_tool=_PY_CONTEST,
+        overrides={"*.py": "black"},
+    )
+    unenforceable = resolve_format_authority(
+        claims_by_tool=_PY_CONTEST,
+        overrides={"*.py": "ruff"},
+    )
+
+    assert_that(authority.owner_of("*.py")).is_equal_to("black")
+    assert_that(unenforceable.owner_of("*.py")).is_equal_to("black")
+    assert_that(unenforceable.ignored_overrides).is_equal_to((("*.py", "ruff"),))
+
+
+def test_an_ignored_override_falls_back_through_the_owner_table() -> None:
+    """The chain continues at step 2; it does not jump to rule (d)."""
+    authority = resolve_format_authority(
+        claims_by_tool=_PY_CONTEST,
+        overrides={"*.py": "mypy"},
+    )
+
+    assert_that(authority.owners["*.py"].source).is_equal_to(OwnerSource.TABLE)
+
+
+def test_an_ignored_override_is_disclosed_on_an_uncontested_pattern() -> None:
+    """Nothing was demoted, but the config still did not do what it said."""
+    authority = resolve_format_authority(
+        claims_by_tool={
+            "prettier": [Claim(patterns=["*.html"], capabilities={Cap.FORMAT})],
+        },
+        overrides={"*.html": "markdownlint"},
+    )
+    lines = authority_summary_lines(authority)
+
+    assert_that(authority.demotions).is_empty()
+    assert_that("\n".join(lines)).contains("ignored authority.format *.html")
 
 
 def test_summary_lines_are_empty_when_nothing_was_demoted() -> None:
