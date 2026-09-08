@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import MagicMock, patch
 
 import click
 import pytest
@@ -534,30 +535,33 @@ def test_provider_option_flag_rejects_a_malformed_pair(value: str) -> None:
     assert_that(str(excinfo.value)).contains("NAME=VALUE")
 
 
-def test_review_rejects_an_unknown_provider_option(
-    isolated_project: Path,
-) -> None:
+def test_review_rejects_an_unknown_provider_option() -> None:
     """``lintro review`` surfaces the resolver's rejection as a usage error.
 
-    Args:
-        isolated_project: Empty project directory with the user tier isolated.
+    ``require_ai`` and ``get_config`` are patched the way every other
+    ``lintro review`` test patches them: the guard runs before the overrides
+    are resolved, so without the patch this asserts on "AI features require
+    lintro[ai]" on the matrix leg installed without the extra, and never
+    reaches the validation it exists to cover.
     """
-    (isolated_project / ".lintro-config.yaml").write_text(
-        yaml.safe_dump(
-            {"ai": {"enabled": True, "review": True, "provider": "cursor"}},
+    mock_config = MagicMock(
+        ai={"enabled": True, "review": True, "provider": "cursor"},
+    )
+    with (
+        patch("lintro.cli_utils.commands.review.require_ai"),
+        patch(
+            "lintro.cli_utils.commands.review.get_config",
+            return_value=mock_config,
         ),
-        encoding="utf-8",
-    )
-    clear_config_cache()
+    ):
+        result = CliRunner().invoke(
+            cli,
+            ["review", "--provider-option", "trust_workspaces=false"],
+        )
 
-    result = CliRunner().invoke(
-        cli,
-        ["review", "--provider-option", "trust_workspaces=false"],
-    )
-
-    clear_config_cache()
-    assert_that(result.exit_code).is_not_equal_to(0)
+    assert_that(result.exit_code).is_equal_to(2)
     assert_that(result.output).contains("trust_workspace")
+    assert_that(result.output).does_not_contain("Traceback")
 
 
 # -- AC3: the legacy shim --------------------------------------------------
