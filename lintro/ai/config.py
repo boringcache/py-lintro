@@ -11,6 +11,11 @@ Fields are logically grouped into three areas:
 
 The flat attribute API (``config.provider``, ``config.max_tokens``, …)
 is the primary interface; the grouping is for documentation only.
+
+Every flat field is shared: read by the pipeline, or by two or more provider
+backends. A knob only one vendor understands lives on that provider's own
+``ai.providers.<name>`` block instead, reached through
+:meth:`AIConfig.provider_settings` (#2309).
 """
 
 from __future__ import annotations
