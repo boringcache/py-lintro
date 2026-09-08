@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from assertpy import assert_that
@@ -798,6 +798,20 @@ def test_capture_verify_baseline_honours_the_runs_own_narrowing(
             ),
         },
     )
+    walk_kwargs: list[dict[str, Any]] = []
+
+    def _record_walk(**kwargs: Any) -> list[str]:
+        """Record the walk arguments and report a single changed file.
+
+        Args:
+            **kwargs: Arguments ``capture_verify_baseline`` passed through.
+
+        Returns:
+            list[str]: The one file this run could have touched.
+        """
+        walk_kwargs.append(kwargs)
+        return [str(changed)]
+
     if narrowing == "incremental":
         monkeypatch.setattr(
             verify_pass,
@@ -807,11 +821,7 @@ def test_capture_verify_baseline_honours_the_runs_own_narrowing(
         incremental = True
         diff_base: str | None = None
     else:
-        monkeypatch.setattr(
-            verify_pass,
-            "walk_files_with_excludes",
-            lambda **_kwargs: [str(changed)],
-        )
+        monkeypatch.setattr(verify_pass, "walk_files_with_excludes", _record_walk)
         incremental = False
         diff_base = "origin/main"
 
@@ -824,6 +834,12 @@ def test_capture_verify_baseline_honours_the_runs_own_narrowing(
         diff_base=diff_base,
     )
 
+    if narrowing == "diff":
+        # The scoping arguments have to reach the walk, not merely be accepted
+        # by the signature: deleting ``diff_base=diff_base`` must fail here.
+        assert_that(walk_kwargs).is_length(1)
+        assert_that(walk_kwargs[0]["diff_base"]).is_equal_to("origin/main")
+        assert_that(walk_kwargs[0]["file_patterns"]).is_equal_to(["*.py"])
     assert_that(list(baseline.candidates)).is_equal_to([str(changed)])
     # The scan paths cover more than the candidates now, so the floor must
     # name the files rather than re-widening to the tree.
@@ -892,16 +908,235 @@ def test_every_fmt_tool_claims_exactly_what_it_discovers() -> None:
     from lintro.tools import tool_manager
 
     mismatched: dict[str, tuple[list[str], list[str]]] = {}
+    project_scoped: list[str] = []
     for name in tool_manager.get_fix_tools():
         definition = tool_manager.get_tool(name).definition
+        mutating = [
+            claim
+            for claim in getattr(definition, "claims", None) or ()
+            if claim.is_mutating
+        ]
+        if not mutating:
+            continue
         claimed: set[str] = set()
-        for claim in getattr(definition, "claims", None) or ():
-            if claim.is_mutating:
-                claimed.update(claim.patterns)
+        for claim in mutating:
+            claimed.update(claim.patterns)
         if not claimed:
+            # A fix tool whose mutating claim is project-scoped is the one
+            # shape the pass cannot handle: ``_mutating_patterns_by_tool``
+            # drops it, so nothing of its is ever fingerprinted, the scope
+            # comes back empty and the fold carries every pre-fix finding —
+            # a clean fix would report ``fixed=0`` and fail the run. No tool
+            # declares one today; this fails the day one does.
+            project_scoped.append(name)
             continue
         discovered = set(definition.file_patterns or ())
         if claimed != discovered:
             mismatched[name] = (sorted(claimed), sorted(discovered))
 
+    assert_that(project_scoped).is_empty()
     assert_that(mismatched).is_equal_to({})
+
+
+def test_a_whole_project_check_supersedes_findings_outside_the_scope() -> None:
+    """A file the CHECK reported on is verified, whatever the scope asked for.
+
+    clippy runs ``cargo clippy`` from the crate root with no file arguments,
+    and golangci-lint does the same from the module root, so their verify
+    ``CHECK`` reports on files the narrowed scope never named. Counting only
+    ``scope.files`` as verified would carry those files' pre-fix findings as
+    survivors *and* append the same findings again, inflating ``remaining``,
+    deflating ``fixed``, and leaving a residual that can never reach zero.
+    """
+    mutation = ToolResult(
+        name="clippy",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("/repo/src/main.rs"), _issue("/repo/src/lib.rs")],
+        initial_issues_count=2,
+        fixed_issues_count=2,
+        remaining_issues_count=0,
+        cwd="/repo",
+        capability=Cap.FIX,
+    )
+    # The scope named only main.rs, but a crate-wide check answers for both.
+    verify = ToolResult(
+        name="clippy",
+        success=False,
+        issues_count=1,
+        issues=[_issue("src/lib.rs")],
+        cwd="/repo",
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="clippy", result=verify)],
+        scope=VerifyScope(files=("/repo/src/main.rs",), narrowed=True),
+    )
+
+    folded = results[0]
+    # One finding, not two: lib.rs is verified by the check that named it, so
+    # its pre-fix finding is replaced rather than added to.
+    assert_that(folded.remaining_issues_count).is_equal_to(1)
+    assert_that([i.file for i in folded.issues or []]).is_equal_to(["src/lib.rs"])
+    assert_that(folded.fixed_issues_count).is_equal_to(1)
+
+
+def test_a_finding_with_no_file_never_verifies_anything() -> None:
+    """A position-less finding must not be read as a verdict about a file.
+
+    golangci-lint parks findings it cannot place under a ``(module)``
+    placeholder. Those name no file, so they can neither be matched to a
+    fingerprinted path nor supersede one.
+    """
+    mutation = ToolResult(
+        name="golangci_lint",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("/repo/a.go")],
+        initial_issues_count=1,
+        fixed_issues_count=1,
+        remaining_issues_count=0,
+        cwd="/repo",
+        capability=Cap.FIX,
+    )
+    verify = ToolResult(
+        name="golangci_lint",
+        success=False,
+        issues_count=1,
+        issues=[_issue("")],
+        cwd="/repo",
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="golangci_lint", result=verify)],
+        scope=VerifyScope(files=(), narrowed=True),
+    )
+
+    # The unplaceable finding plus the pre-fix one it did not answer for.
+    assert_that(results[0].remaining_issues_count).is_equal_to(2)
+
+
+def test_a_tool_the_registry_cannot_resolve_is_reported_unverified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unresolvable name must not silently drop out of the verify pass.
+
+    "Declares no CHECK" (prettier) and "cannot be resolved" used to collapse
+    onto the same empty-claims value, and only the first is safe to fold as
+    trust-the-mutation-result. The second knows nothing about the tool, so its
+    self-reported ``remaining=0`` must not stand.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    healthy = _FakeTool(
+        definition=_FakeDefinition(
+            claims=[Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})],
+        ),
+        result=ToolResult(name="ruff", success=True, issues_count=0),
+    )
+    # ``_register``'s fake registry raises KeyError for anything else.
+    _register(monkeypatch, {"ruff": healthy})
+
+    outcomes = run_verify_pass(
+        tools_to_run=["ghost", "ruff"],
+        scope=VerifyScope(files=("/a.py",), narrowed=True),
+        configure=lambda *, tool_name: cast("VerifiableTool", healthy),
+    )
+
+    assert_that([(o.tool, o.ran) for o in outcomes]).is_equal_to(
+        [("ghost", False), ("ruff", True)],
+    )
+    assert_that(outcomes[0].result).is_none()
+
+
+def test_an_empty_candidate_set_needs_no_scope_at_all() -> None:
+    """No mutating tool claimed a pattern, so there is nothing to verify."""
+    scope = resolve_verify_scope(VerifyBaseline(candidates=()))
+
+    assert_that(list(scope.files)).is_empty()
+    assert_that(scope.narrowed).is_true()
+    assert_that(scope.floor_reason).is_empty()
+    assert_that(scope.summary).is_equal_to("0 changed file(s)")
+
+
+def test_resolve_result_capability_reports_format_for_a_format_only_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prettier holds ``FORMAT`` alone, so that is what its result represents.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    _register(
+        monkeypatch,
+        {
+            "prettier": _FakeTool(
+                definition=_FakeDefinition(
+                    claims=[Claim(patterns=["*.css"], capabilities={Cap.FORMAT})],
+                ),
+            ),
+        },
+    )
+
+    assert_that(
+        resolve_result_capability(tool_name="prettier", action=Action.FIX),
+    ).is_equal_to(Cap.FORMAT)
+
+
+def test_cli_excludes_are_split_and_reach_the_candidate_walk(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``--exclude`` arrives as one comma-joined string and must be split.
+
+    The executor hands the raw CLI value straight through, so the parsing
+    contract lives here rather than at the call site.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        tmp_path: Temporary workspace.
+    """
+    _register(
+        monkeypatch,
+        {
+            "black": _FakeTool(
+                definition=_FakeDefinition(
+                    claims=[Claim(patterns=["*.py"], capabilities={Cap.FORMAT})],
+                ),
+            ),
+        },
+    )
+    walk_kwargs: list[dict[str, Any]] = []
+
+    def _record_walk(**kwargs: Any) -> list[str]:
+        """Record the walk arguments and report no files.
+
+        Args:
+            **kwargs: Arguments ``capture_verify_baseline`` passed through.
+
+        Returns:
+            list[str]: An empty candidate set.
+        """
+        walk_kwargs.append(kwargs)
+        return []
+
+    monkeypatch.setattr(verify_pass, "walk_files_with_excludes", _record_walk)
+
+    capture_verify_baseline(
+        tools_to_run=["black"],
+        paths=[str(tmp_path)],
+        exclude="build, dist ,",
+        include_venv=False,
+    )
+
+    patterns: list[str] = walk_kwargs[0]["exclude_patterns"]
+    assert_that(patterns[:2]).is_equal_to(["build", "dist"])
+    # The built-in defaults and .lintro-ignore are appended after them.
+    assert_that(patterns).contains(".git")

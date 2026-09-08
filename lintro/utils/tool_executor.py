@@ -442,8 +442,19 @@ def _run_verify_phase(
             color="cyan",
         )
 
+    # Only tools whose mutation result the fold can actually use are worth
+    # verifying. ``fold_verify_results`` discards the outcome of a tool that
+    # was skipped or burned its deadline during ``fix``, so configuring and
+    # running its ``CHECK`` would spend a whole tool invocation on a result
+    # that is thrown away.
+    foldable = [
+        name
+        for name in tools_to_run
+        if not any(r.name == name and (r.skipped or r.timed_out) for r in all_results)
+    ]
+
     verify_outcomes = verify_pass.run_verify_pass(
-        tools_to_run=tools_to_run,
+        tools_to_run=foldable,
         scope=scope,
         configure=_configure_for_verify,
     )

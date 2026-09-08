@@ -83,6 +83,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "COARSE_MTIME_REASON",
+    "UnresolvableToolError",
     "NARROWED_REASON",
     "UNREADABLE_REASON",
     "VerifiableTool",
@@ -105,6 +106,17 @@ COARSE_MTIME_REASON: str = "coarse mtime resolution"
 
 #: Floor reason: at least one candidate file could not be stat'ed.
 UNREADABLE_REASON: str = "some files could not be fingerprinted"
+
+
+class UnresolvableToolError(LookupError):
+    """Raised when the registry cannot resolve a tool the run selected.
+
+    Distinguishing this from "declares no claims" is what stops the verify
+    pass failing open: prettier legitimately declares no ``CHECK``, and its
+    mutation result stands. A name that cannot be resolved is a different
+    thing — nothing is known about it, so its self-reported ``remaining=0``
+    must not be trusted either.
+    """
 
 
 class VerifiableTool(Protocol):
@@ -140,7 +152,10 @@ def _claims_for(tool_name: str) -> list[Claim]:
         tool_name: Registry key of the tool.
 
     Returns:
-        The tool's claims, or an empty list when it cannot be resolved.
+        The tool's claims, or an empty list when it declares none.
+
+    Raises:
+        UnresolvableToolError: If the registry cannot resolve the name.
     """
     # Imported here rather than at module scope: ``lintro.tools.__init__``
     # re-exports this module, so a top-level import would close a cycle. The
@@ -149,9 +164,25 @@ def _claims_for(tool_name: str) -> list[Claim]:
 
     try:
         definition = tool_manager.get_tool(tool_name).definition
-    except (AttributeError, KeyError, ValueError, RuntimeError):
-        return []
+    except (AttributeError, KeyError, ValueError, RuntimeError) as exc:
+        raise UnresolvableToolError(tool_name) from exc
     return list(getattr(definition, "claims", None) or ())
+
+
+def _claims_or_none(tool_name: str) -> list[Claim] | None:
+    """Read a tool's claims, reporting an unresolvable name as ``None``.
+
+    Args:
+        tool_name: Registry key of the tool.
+
+    Returns:
+        The tool's claims, or ``None`` when the registry cannot resolve it.
+    """
+    try:
+        return _claims_for(tool_name)
+    except UnresolvableToolError:
+        logger.debug(f"Verify pass cannot resolve tool {tool_name!r}")
+        return None
 
 
 def resolve_result_capability(*, tool_name: str, action: Action) -> Cap | None:
@@ -170,7 +201,7 @@ def resolve_result_capability(*, tool_name: str, action: Action) -> Cap | None:
     if action != Action.FIX:
         return Cap.CHECK
     declared: set[Cap] = set()
-    for claim in _claims_for(tool_name):
+    for claim in _claims_or_none(tool_name) or ():
         declared |= claim.capabilities & MUTATING_CAPABILITIES
     if Cap.FIX in declared:
         return Cap.FIX
@@ -195,7 +226,7 @@ def _mutating_patterns_by_tool(
     by_tool: dict[str, list[str]] = {}
     for name in tool_names:
         patterns: set[str] = set()
-        for claim in _claims_for(name):
+        for claim in _claims_or_none(name) or ():
             if claim.is_mutating:
                 patterns.update(claim.patterns)
         if patterns:
@@ -214,11 +245,35 @@ def verifying_tools(tool_names: Sequence[str]) -> list[str]:
         ``CHECK`` claim (prettier is ``FORMAT``-only) has no residual to
         report and is not asked for one.
     """
-    verifying: list[str] = []
+    return [name for name, resolvable in _verify_targets(tool_names) if resolvable]
+
+
+def _verify_targets(tool_names: Sequence[str]) -> list[tuple[str, bool]]:
+    """Return every tool the verify pass must account for, and whether it resolved.
+
+    Two different things used to collapse onto "no claims": prettier
+    legitimately declares no ``CHECK`` and its mutation result stands, while a
+    name the registry cannot resolve is a tool nothing is known about. Folding
+    the second like the first would trust its self-reported ``remaining=0``,
+    which is the fail-open this pass exists to close.
+
+    Args:
+        tool_names: Tools selected for the run, in execution order.
+
+    Returns:
+        ``(name, resolvable)`` pairs, in order. Resolvable tools appear only
+        when they declare ``CHECK``; unresolvable ones always appear, so the
+        pass can report that it could not verify them.
+    """
+    targets: list[tuple[str, bool]] = []
     for name in tool_names:
-        if any(Cap.CHECK in claim.capabilities for claim in _claims_for(name)):
-            verifying.append(name)
-    return verifying
+        claims = _claims_or_none(name)
+        if claims is None:
+            targets.append((name, False))
+            continue
+        if any(Cap.CHECK in claim.capabilities for claim in claims):
+            targets.append((name, True))
+    return targets
 
 
 @dataclass(frozen=True)
@@ -503,7 +558,12 @@ def run_verify_pass(
     """
     outcomes: list[VerifyOutcome] = []
     files = list(scope.scan_targets)
-    for name in verifying_tools(tools_to_run):
+    for name, resolvable in _verify_targets(tools_to_run):
+        if not resolvable:
+            # Nothing is known about this tool, so nothing about its residual
+            # can be trusted either.
+            outcomes.append(VerifyOutcome(tool=name, result=None, ran=False))
+            continue
         if not scope.files:
             # Nothing was rewritten, so nothing needs re-checking. The tool's
             # pre-fix findings are still its post-fix findings.
@@ -527,6 +587,44 @@ def run_verify_pass(
         result.duration_seconds = time.monotonic() - started
         outcomes.append(VerifyOutcome(tool=name, result=result, ran=True))
     return outcomes
+
+
+def _verified_paths(
+    *,
+    scope: VerifyScope,
+    verify: ToolResult | None,
+) -> set[str]:
+    """Return every file the verify pass can be said to have covered.
+
+    The narrowed scope is the *intent*; it is not the whole answer. Several
+    fix-capable tools ignore the paths they are handed and check their whole
+    project — clippy runs ``cargo clippy`` from the crate root with no file
+    arguments, golangci-lint does the same from the module root — so their
+    ``CHECK`` reports on files the scope never named. Counting only
+    ``scope.files`` as verified would carry those files' pre-fix findings as
+    survivors *and* append the same findings again from the verify result,
+    inflating ``remaining``, deflating ``fixed``, and leaving a residual that
+    can never reach zero.
+
+    A file the check actually reported on has been re-examined by definition,
+    whatever the scope asked for, so its verdict replaces the pre-fix one.
+
+    Args:
+        scope: The file set the verify pass was asked to cover.
+        verify: The tool's ``CHECK`` result, or ``None`` when it produced no
+            verdict — in which case nothing was verified at all.
+
+    Returns:
+        Absolute paths whose pre-fix findings are superseded.
+    """
+    if verify is None:
+        return set()
+    covered = set(scope.files)
+    for issue in verify.issues or ():
+        path = _issue_path(issue, cwd=verify.cwd)
+        if path:
+            covered.add(path)
+    return covered
 
 
 def _fold_one(
@@ -554,7 +652,10 @@ def _fold_one(
     # execution error comes back as ``success=False`` with no parsed issues,
     # and treating that as "clean" would drop the pre-fix findings.
     check_answered = verify is not None and (verify.success or bool(verify.issues))
-    verified_paths = set(scope.files) if check_answered else set()
+    verified_paths = _verified_paths(
+        scope=scope,
+        verify=verify if check_answered else None,
+    )
     survivors: list[BaseIssue] = [
         issue
         for issue in _pre_fix_issues(mutation)

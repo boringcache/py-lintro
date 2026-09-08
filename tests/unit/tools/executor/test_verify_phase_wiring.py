@@ -63,6 +63,7 @@ class _MutatingTool:
         self._target = target
         self._residual = residual
         self.fix_calls = 0
+        self.time_out = False
         self.checked_paths: list[str] | None = None
 
     def set_options(self, **_kwargs: Any) -> None:
@@ -95,7 +96,8 @@ class _MutatingTool:
         self._target.write_text("x = 2\n", encoding="utf-8")
         return ToolResult(
             name="ruff",
-            success=True,
+            success=not self.time_out,
+            timed_out=self.time_out,
             output="Fixed 1 issue(s)",
             issues_count=0,
             issues=[],
@@ -489,3 +491,41 @@ def test_a_dry_run_preview_stays_read_only(
     assert_that([call["action"] for call in _executor_doubles]).is_equal_to(
         [Action.CHECK],
     )
+
+
+def test_a_timed_out_tool_is_not_asked_to_verify(
+    monkeypatch: pytest.MonkeyPatch,
+    _executor_doubles: list[dict[str, Any]],
+    tmp_path: Path,
+    fake_logger: Any,
+) -> None:
+    """A tool whose fix burned its deadline gets no verify invocation.
+
+    ``fold_verify_results`` discards the outcome of a skipped or timed-out
+    tool, so configuring and running its ``CHECK`` would spend a whole tool
+    invocation on a result that is thrown away — and would spend it on a tool
+    that has just proved it cannot finish inside its budget.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        _executor_doubles: Recorded configuration calls and gate doubles.
+        tmp_path: Temporary workspace.
+        fake_logger: Console logger double.
+    """
+    workspace = tmp_path / "src"
+    workspace.mkdir()
+    target = _seed(workspace / "a.py")
+    tool = _MutatingTool(target=target, residual=2)
+    tool.time_out = True
+    monkeypatch.setattr(tool_manager, "get_tool", lambda name: tool)
+
+    _run_fmt(
+        ctx=_fix_context(tmp_path=tmp_path, fake_logger=fake_logger),
+        workspace=workspace,
+    )
+
+    # Only the mutation configure; no CHECK was ever set up or run.
+    assert_that([call["action"] for call in _executor_doubles]).is_equal_to(
+        [Action.FIX],
+    )
+    assert_that(tool.checked_paths).is_none()
