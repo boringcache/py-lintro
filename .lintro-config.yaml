@@ -132,8 +132,8 @@ ai:
   # LINTRO_AI_MAX_COST_USD (dogfood operators set `uncapped`); YAML `0`
   # would be a literal $0 cap.
   provider: anthropic
-  # model: <provider default>       # uses provider default if omitted
-  # api_key_env: <provider default> # uses provider default if omitted
+  # Omit `model` and `api_key_env` to take the chosen provider's own defaults;
+  # `lintro doctor` prints the pair in effect. Set them only to override.
   # default_fix: false      # set true to always run --fix in chk
   auto_apply: false
   auto_apply_safe_fixes: true # auto-apply deterministic style fixes (e.g. E501)

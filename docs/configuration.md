@@ -191,7 +191,7 @@ enforce:
 ai:
   enabled: true
   provider: anthropic # or cursor / openai — required, no default
-  transport: api # or cli — required, no default
+  transport: api # or cli — no default; doctor flags it unset
 ```
 
 ## Lintro Configuration
@@ -3339,7 +3339,7 @@ ai:
   lint: true # AI summaries / --fix on chk/fmt
   review: false # lintro review (opt-in separately)
   provider: anthropic # or cursor / openai — required, no default
-  transport: api # or cli — required, no default
+  transport: api # or cli — no default; doctor flags it unset
 ```
 
 ### AI CLI Flags
@@ -3440,7 +3440,7 @@ skipped result rather than failing the run. Findings are cached by content hash 
 ai:
   enabled: true
   provider: anthropic # or cursor / openai — required, no default
-  transport: api # or cli — required, no default
+  transport: api # or cli — no default; doctor flags it unset
 tools:
   idiom-review:
     options:

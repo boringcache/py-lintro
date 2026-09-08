@@ -21,7 +21,7 @@ interactive fix suggestions on top of standard linting results.
 # ai:
 #   enabled: true
 #   provider: anthropic | cursor | openai   # required, no default
-#   transport: api | cli                    # required, no default
+#   transport: api | cli                    # no default; doctor flags it unset
 
 # Run check — AI summary is generated automatically (1 API call)
 lintro check
@@ -206,7 +206,7 @@ degrades gracefully to a skipped result rather than failing the run.
 ai:
   enabled: true
   provider: anthropic # or cursor / openai — required, no default
-  transport: api # or cli — required, no default
+  transport: api # or cli — no default; doctor flags it unset
 tools:
   idiom-review:
     options:
@@ -791,8 +791,8 @@ ai:
   review: true # the `lintro review` AI diff review
   provider: anthropic # "anthropic" | "cursor" | "openai"; no default
   transport: api # "api" (SDK) or "cli" (local agent binary); no default
-  # model: <provider default>       # uses provider default if omitted
-  # api_key_env: <provider default> # uses provider default if omitted
+  # Omit `model` and `api_key_env` to take the chosen provider's defaults
+  # (`lintro doctor` prints the pair in effect); set them only to override.
 ```
 
 ### Feature Toggles
@@ -850,8 +850,8 @@ ai:
   # "cursor" requires "cli". See "Transports".
   transport: api
 
-  # Model override (uses provider default if omitted). (str, default: none)
-  # model: <provider default>
+  # Model override; omit to take the chosen provider's default. (str, default: none)
+  # model: claude-sonnet-4-6  # example: an anthropic model id
 
   # Custom env var for API key (uses provider default if omitted).
   # (str, default: none)

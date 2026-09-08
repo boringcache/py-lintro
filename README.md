@@ -383,7 +383,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # ai:
 #   enabled: true
 #   provider: anthropic | cursor | openai   # required, no default
-#   transport: api | cli                    # required, no default
+#   transport: api | cli                    # no default; doctor flags it unset
 ```
 
 See the [AI Features Guide](docs/ai-features.md) for full documentation.
