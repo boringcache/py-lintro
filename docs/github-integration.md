@@ -97,10 +97,11 @@ workflow runs an AI diff review and prints the JSON result to the job log.
   the unit tests.
 - 🔑 **Bring-your-own credential** — runs the `cli` transport. Provider and model come
   from the `LINTRO_AI_PROVIDER` / `LINTRO_AI_MODEL` Actions variables. When those
-  variables are unset the workflow falls through to the committed defaults (`anthropic`,
-  empty model). Operators can set them to `cursor` and `cursor-grok-4.6-high` for
-  current dogfood. Cursor uses `CURSOR_API_KEY`; Anthropic uses the pinned `claude` CLI
-  authenticated by `CLAUDE_CODE_OAUTH_TOKEN` (a Claude subscription session).
+  variables are unset the workflow falls through to this repository's committed
+  `.lintro-config.yaml` choice (`anthropic`, empty model) — an explicit per-repo pick,
+  not a lintro default. Operators can set them to `cursor` and `cursor-grok-4.6-high`
+  for current dogfood. Cursor uses `CURSOR_API_KEY`; Anthropic uses the pinned `claude`
+  CLI authenticated by `CLAUDE_CODE_OAUTH_TOKEN` (a Claude subscription session).
   `ANTHROPIC_API_KEY` is deliberately **not** in scope, and `LINTRO_CLI_BARE: never`
   keeps `--bare` off the command line so an OAuth session is actually used (#1838). CLI
   versions are pinned in `docker/ai-tools.Dockerfile` and installed from npm at those

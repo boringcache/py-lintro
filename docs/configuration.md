@@ -82,7 +82,8 @@ The configuration system works in a specific order:
 
 5. **AI Tier** - AI-powered summaries and fix suggestions (opt-in)
    - `enabled`: Whether AI features are active (default: `false`)
-   - `provider`: AI provider to use (`anthropic` or `openai`)
+   - `provider`: AI provider to use (`anthropic`, `cursor` or `openai`) — required when
+     AI is enabled; there is no default
    - Applied only when enabled and a valid API key is set
 
 ### Configuration Resolution Example
@@ -189,7 +190,8 @@ enforce:
   line_length: 100
 ai:
   enabled: true
-  provider: anthropic
+  provider: anthropic # or cursor / openai — required, no default
+  transport: api # or cli — required, no default
 ```
 
 ## Lintro Configuration
@@ -609,7 +611,7 @@ export LINTRO_AI_MAX_COST_USD=uncapped # sentinel; a positive number is a USD ca
 | `LINTRO_CONFIG`                  | Shown in the `lintro` environment report; informational only                                                                                 | -         |
 | `LINTRO_ENABLE_EXTERNAL_PLUGINS` | Opt in to loading external (third-party) plugins (`1`/`0`)                                                                                   | `0`       |
 | `LINTRO_NO_CACHE`                | Force-clear caches each invoke (`1`/`true`/`yes`/`on`)                                                                                       | -         |
-| `LINTRO_AI_PROVIDER`             | Override `ai.provider` (`anthropic` / `openai` / `cursor`)                                                                                   | -         |
+| `LINTRO_AI_PROVIDER`             | Override `ai.provider` (`anthropic` / `cursor` / `openai`)                                                                                   | -         |
 | `LINTRO_AI_MODEL`                | Override `ai.model`                                                                                                                          | -         |
 | `LINTRO_AI_TRANSPORT`            | Override `ai.transport` (`api` / `cli`)                                                                                                      | -         |
 | `LINTRO_AI_ENABLED`              | Override `ai.enabled` (`1`/`0`/`true`/`false`)                                                                                               | -         |
@@ -3324,10 +3326,10 @@ uv sync --extra ai
 # Set the API key for your configured provider. `ai.provider` is required;
 # lintro has no default provider.
 # Anthropic: ANTHROPIC_API_KEY
-# OpenAI:    OPENAI_API_KEY
 # Cursor:    CURSOR_API_KEY
+# OpenAI:    OPENAI_API_KEY
 # Custom:    set ai.api_key_env in config to use any env var name
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...   # whichever provider you chose
 ```
 
 ```yaml
@@ -3336,7 +3338,8 @@ ai:
   enabled: true
   lint: true # AI summaries / --fix on chk/fmt
   review: false # lintro review (opt-in separately)
-  provider: anthropic
+  provider: anthropic # or cursor / openai — required, no default
+  transport: api # or cli — required, no default
 ```
 
 ### AI CLI Flags
@@ -3365,7 +3368,7 @@ ai:
 | `enabled`               | bool   | `false`        | Master switch; ANDs with `lint` / `review`                                                   |
 | `lint`                  | bool   | `false`        | Enable AI lint summaries on `chk`/`fmt`                                                      |
 | `review`                | bool   | `false`        | Enable the `lintro review` AI diff review                                                    |
-| `provider`              | string | `anthropic`    | AI provider (`anthropic`, `openai`, or `cursor`)                                             |
+| `provider`              | string | none           | AI provider (`anthropic`, `cursor`, or `openai`); required when AI is enabled                |
 | `model`                 | string | (default)      | Model override                                                                               |
 | `api_key_env`           | string | (default)      | Custom env var for API key                                                                   |
 | `default_fix`           | bool   | `false`        | Always run `--fix` in check                                                                  |
@@ -3402,7 +3405,9 @@ is classified **advisory**, so it runs under `lintro review` — never under
 
 ```bash
 uv pip install 'lintro[ai]'
-export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY for OpenAI
+# Set the variable your chosen provider declares: ANTHROPIC_API_KEY,
+# CURSOR_API_KEY or OPENAI_API_KEY.
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 The tool is **disabled by default** and is a no-op until explicitly opted in. When no AI
@@ -3434,8 +3439,8 @@ skipped result rather than failing the run. Findings are cached by content hash 
 # .lintro-config.yaml
 ai:
   enabled: true
-  provider: anthropic
-  transport: api
+  provider: anthropic # or cursor / openai — required, no default
+  transport: api # or cli — required, no default
 tools:
   idiom-review:
     options:

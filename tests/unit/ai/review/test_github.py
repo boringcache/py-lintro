@@ -15,6 +15,7 @@ from lintro.ai.exceptions import (
     AIRateLimitError,
 )
 from lintro.ai.models.github_api_response import GitHubApiResponse
+from lintro.ai.provider_enum import AIProvider
 from lintro.ai.review.enums.checklist_display import ChecklistDisplay
 from lintro.ai.review.github import (
     GITHUB_COMMENT_HARD_LIMIT,
@@ -204,11 +205,19 @@ def test_run_mechanics_marks_estimated_with_tilde(
 
 
 def test_format_error_comment_auth() -> None:
-    """Authentication errors render a specific message."""
+    """Authentication errors render a specific, provider-neutral message.
+
+    The guidance points at whichever variable the configured provider
+    declares rather than naming a vendor's: lintro has no default provider
+    (#2143), so a sticky that named one would be wrong for the other two.
+    """
     body = format_error_comment(error=AIAuthenticationError("bad key"))
 
     assert_that(body).contains("authentication failed")
-    assert_that(body).contains("ANTHROPIC_API_KEY")
+    assert_that(body).contains("API-key secret", "configured", "provider")
+    assert_that(body).does_not_contain(
+        *(provider.value for provider in AIProvider),
+    )
     assert_that(body).contains(STICKY_MARKER)
 
 
