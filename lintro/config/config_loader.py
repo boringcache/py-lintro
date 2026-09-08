@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from lintro.config.deps_config import DepsConfig
 from lintro.config.lintro_config import (
+    AuthorityConfig,
     EnforceConfig,
     ExecutionConfig,
     LintroConfig,
@@ -900,6 +901,50 @@ def _parse_deps_config(data: Any) -> DepsConfig:
     return DepsConfig(**data)
 
 
+def _parse_authority_config(data: Any) -> AuthorityConfig:
+    """Parse the ``authority`` configuration section (#1744).
+
+    Args:
+        data: Raw ``authority`` section from config.
+
+    Returns:
+        AuthorityConfig: Parsed authority configuration.
+
+    Raises:
+        ValueError: When the section, or its ``format`` table, is not a
+            mapping of pattern to tool name. Authority decides which tool
+            rewrites a file, so a malformed override fails loudly rather
+            than being dropped.
+    """
+    if data is None:
+        return AuthorityConfig()
+    if not isinstance(data, dict):
+        msg = f"authority config must be a mapping, got {type(data).__name__}"
+        raise ValueError(msg)
+    if not data:
+        return AuthorityConfig()
+
+    known_fields = set(AuthorityConfig.model_fields)
+    unknown = set(data) - known_fields
+    if unknown:
+        logger.warning(
+            "Unknown authority config keys ignored: {}",
+            ", ".join(sorted(unknown)),
+        )
+    owners = data.get("format", {})
+    if not isinstance(owners, dict):
+        msg = f"authority.format must be a mapping, got {type(owners).__name__}"
+        raise ValueError(msg)
+    for pattern, tool in owners.items():
+        if not isinstance(tool, str) or not tool.strip():
+            msg = (
+                f"authority.format['{pattern}'] must name a tool, got "
+                f"{type(tool).__name__}"
+            )
+            raise ValueError(msg)
+    return AuthorityConfig(format={str(k): str(v) for k, v in owners.items()})
+
+
 def _parse_watch_config(data: Any) -> WatchConfig:
     """Parse the ``watch`` configuration section.
 
@@ -987,6 +1032,7 @@ def _pyproject_lintro_catalog() -> _PyprojectLintroCatalog:
         | externally_handled_sections
         | {
             "ai",
+            "authority",
             "defaults",
             "deps",
             "output",
@@ -1062,6 +1108,7 @@ def _convert_pyproject_to_config(data: dict[str, Any]) -> dict[str, Any]:
         "output": {},
         "watch": {},
         "deps": {},
+        "authority": {},
     }
 
     catalog = _pyproject_lintro_catalog()
@@ -1144,6 +1191,10 @@ def _convert_pyproject_to_config(data: dict[str, Any]) -> dict[str, Any]:
             result["output"] = value
         elif key_lower == "watch":
             result["watch"] = value
+        elif key_lower == "authority":
+            # Pass through non-mappings so ``_parse_authority_config``
+            # fail-closes instead of silently dropping the override.
+            result["authority"] = value
         elif key_lower == "deps":
             # Pass through non-mappings so ``_parse_deps_config`` fail-closes
             # instead of treating ``deps = true`` as an unrecognized key.
@@ -1376,6 +1427,7 @@ def build_config_from_dict(
     output_config = _parse_output_config(data.get("output", {}))
     watch_config = _parse_watch_config(data.get("watch", {}))
     deps_config = _parse_deps_config(data.get("deps", {}))
+    authority_config = _parse_authority_config(data.get("authority", {}))
 
     return LintroConfig(
         execution=execution_config,
@@ -1387,6 +1439,7 @@ def build_config_from_dict(
         output=output_config,
         watch=watch_config,
         deps=deps_config,
+        authority=authority_config,
         config_path=resolved_path,
     )
 

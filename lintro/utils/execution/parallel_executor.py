@@ -21,6 +21,7 @@ from rich.progress import (
 
 from lintro.enums.action import Action
 from lintro.models.core.tool_result import ToolResult
+from lintro.tools import authority as authority_module
 from lintro.tools import tool_manager
 from lintro.utils.execution.tool_configuration import configure_tool_for_execution
 from lintro.utils.unified_config import UnifiedConfigManager
@@ -84,6 +85,7 @@ def run_tools_parallel(
     auto_install: bool = False,
     max_fix_retries: int = 3,
     diff_base: str | None = None,
+    authority: authority_module.FormatAuthority | None = None,
 ) -> list[ToolResult]:
     """Run tools in parallel using async executor.
 
@@ -102,6 +104,8 @@ def run_tools_parallel(
         auto_install: Whether to auto-install Node.js deps if missing.
         max_fix_retries: Maximum fix→verify convergence cycles.
         diff_base: Resolved git base ref for ``--diff`` scanning, or None.
+        authority: Format authority resolved once for the run. Resolved per
+            tool from ``selected_tools`` when omitted.
 
     Returns:
         List of ToolResult objects.
@@ -169,6 +173,7 @@ def run_tools_parallel(
                             selected_tools=selected_tools,
                             auto_install=auto_install,
                             diff_base=diff_base,
+                            authority=authority,
                         )
                     except (OSError, ValueError, RuntimeError) as exc:
                         # Same telemetry the sequential path records: a

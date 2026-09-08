@@ -16,6 +16,8 @@ from lintro.config.config_loader import get_config
 from lintro.enums.action import Action, normalize_action
 from lintro.enums.tool_name import ToolName
 from lintro.enums.tools_value import ToolsValue
+from lintro.tools import authority as authority_module
+from lintro.tools import concessions as concessions_module
 from lintro.tools import tool_manager
 from lintro.utils.unified_config import UnifiedConfigManager
 
@@ -215,6 +217,7 @@ def configure_tool_for_execution(
     auto_install: bool = False,
     lintro_config: LintroConfig | None = None,
     diff_base: str | None = None,
+    authority: authority_module.FormatAuthority | None = None,
 ) -> BaseToolPlugin:
     """Configure a tool for execution.
 
@@ -243,6 +246,8 @@ def configure_tool_for_execution(
         lintro_config: Optional LintroConfig to reuse; fetched via get_config() if None.
         diff_base: Resolved git base ref for ``--diff`` scanning, or None to scan
             all discovered files.
+        authority: Format authority resolved once for the run. Resolved from
+            ``selected_tools`` when omitted.
 
     Returns:
         The configured per-invocation tool copy to run.
@@ -294,23 +299,37 @@ def configure_tool_for_execution(
     if effective_tool_auto_install:
         tool.set_options(auto_install=True)
 
-    # Format authority on ``*.py`` (#1735 rule (d): fewest mutating
-    # capabilities wins). When black is in the run it owns FORMAT, so ruff is
-    # demoted to its FIX capability and its formatting stages are switched off
-    # unless the user explicitly asked for them. The derived DAG already puts
-    # ruff before black; this stops the two from formatting the same file.
-    if "black" in selected_tools and tool_name == ToolName.RUFF.value:
-        tool_config = config_manager.get_tool_config(tool_name)
-        lintro_tool_cfg = tool_config.lintro_tool_config or {}
-        if action == Action.FIX:
-            if "format" not in cli_overrides and "format" not in lintro_tool_cfg:
-                tool.set_options(format=False)
-        else:  # check
-            if (
-                "format_check" not in cli_overrides
-                and "format_check" not in lintro_tool_cfg
-            ):
-                tool.set_options(format_check=False)
+    # Format authority (#1744): at most one tool holds FORMAT for a pattern,
+    # and the loser is demoted rather than dropped. The derived DAG already
+    # orders FIX -> FORMAT -> CHECK; this is what stops two tools from
+    # formatting the same file the opposite way. An option the user set
+    # explicitly — on the CLI or in ``[tool.lintro.<tool>]`` — outranks the
+    # demotion, so lintro's decision never silently overrides a stated one.
+    run_authority = authority or authority_module.resolve_run_authority(
+        tool_names=selected_tools,
+    )
+    tool_cfg_block = config_manager.get_tool_config(tool_name).lintro_tool_config
+    demoted = authority_module.demotion_overrides(
+        tool=tool_name,
+        action=action,
+        authority=run_authority,
+        user_set=set(cli_overrides) | set(tool_cfg_block or {}),
+    )
+    if demoted:
+        tool.set_options(**demoted)
+
+    # A tool that yields FORMAT on a pattern must stop raising format-class
+    # diagnostics about it. Code-level suppression happens on the result; only
+    # an upstream preset changes the tool's own invocation.
+    preset = concessions_module.concession_preset(
+        concessions_module.active_concessions(
+            tool=tool_name,
+            authority=run_authority,
+            selected_tools=selected_tools,
+        ),
+    )
+    if preset:
+        tool.set_options(concession_preset=preset)
 
     return tool
 

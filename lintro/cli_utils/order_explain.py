@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING, NoReturn
 import click
 from rich.text import Text
 
+from lintro.tools.core.authority import (
+    FormatAuthority,
+    resolve_run_authority,
+)
 from lintro.tools.core.scheduler import build_order_report
 
 if TYPE_CHECKING:
@@ -41,6 +45,9 @@ MAX_EDGES_PER_TOOL: int = 5
 
 #: Cap on the tools listed with their constraints in the doctor section.
 MAX_DOCTOR_CONSTRAINTS: int = 5
+
+#: Header for the format-authority section (#1744).
+AUTHORITY_HEADER: str = "Format authority (one owner per pattern)"
 
 
 def _predecessors(report: DerivedOrder) -> dict[str, list[OrderEdge]]:
@@ -103,12 +110,49 @@ def _format_cycle(cycle: OrderCycle) -> list[str]:
     ]
 
 
-def format_order_report(report: DerivedOrder) -> list[str]:
+def format_authority_section(authority: FormatAuthority) -> list[str]:
+    """Render who owns ``FORMAT`` and who was demoted (#1744).
+
+    Only contested patterns are listed. An uncontested pattern has an owner
+    too, but printing forty of them would bury the two decisions that were
+    actually made.
+
+    Args:
+        authority: Resolved format authority for the tool selection.
+
+    Returns:
+        Plain-text lines, empty when no pattern was contested.
+    """
+    contested = authority.contested_patterns
+    if not contested:
+        return []
+    lines = [f"  {AUTHORITY_HEADER}"]
+    for pattern in contested:
+        owner = authority.owners[pattern]
+        rivals = ", ".join(t for t in owner.contenders if t != owner.tool)
+        lines.append(
+            f"    {pattern}: {owner.tool} owns FORMAT "
+            f"(via {owner.source}; over {rivals})",
+        )
+    lines.extend(f"    demoted {demotion.summary}" for demotion in authority.demotions)
+    lines.extend(
+        f"    ignored authority.format {pattern}: {tool} does not format {pattern}"
+        for pattern, tool in authority.ignored_overrides
+    )
+    return lines
+
+
+def format_order_report(
+    report: DerivedOrder,
+    authority: FormatAuthority | None = None,
+) -> list[str]:
     """Render the full execution-order explanation.
 
     Args:
         report: Report produced by
             :func:`lintro.tools.core.scheduler.build_order_report`.
+        authority: Resolved format authority for the same selection. Omitted
+            when a caller only has an order to explain.
 
     Returns:
         Plain-text lines, ready to print one per line.
@@ -133,15 +177,25 @@ def format_order_report(report: DerivedOrder) -> list[str]:
         )
     else:
         lines.append("  Cycles (0): the derived graph is a DAG.")
+    if authority is not None:
+        authority_lines = format_authority_section(authority)
+        if authority_lines:
+            lines.append("")
+            lines.extend(authority_lines)
     return lines
 
 
-def format_doctor_order_section(report: DerivedOrder) -> list[str]:
+def format_doctor_order_section(
+    report: DerivedOrder,
+    authority: FormatAuthority | None = None,
+) -> list[str]:
     """Render the compact ``lintro doctor`` order section.
 
     Args:
         report: Report produced by
             :func:`lintro.tools.core.scheduler.build_order_report`.
+        authority: Resolved format authority for the same selection, so
+            doctor names the owner and any demotion alongside the order.
 
     Returns:
         Plain-text lines for the doctor section.
@@ -164,6 +218,8 @@ def format_doctor_order_section(report: DerivedOrder) -> list[str]:
     hidden = len(constrained) - len(shown)
     if hidden > 0:
         lines.append(f"    ... and {hidden} more constrained tool(s)")
+    if authority is not None:
+        lines.extend(format_authority_section(authority))
     lines.append("    Run 'lintro check --explain-order' for the full order.")
     return lines
 
@@ -198,7 +254,10 @@ def explain_order_lines(
         ignore_conflicts=ignore_conflicts,
         scan_roots=list(paths),
     )
-    return format_order_report(build_order_report(selection.to_run))
+    return format_order_report(
+        build_order_report(selection.to_run),
+        resolve_run_authority(tool_names=selection.to_run),
+    )
 
 
 def emit_order_explanation(
@@ -249,7 +308,10 @@ def doctor_order_lines() -> list[str]:
         selection = get_tools_to_run(None, "check")
     except (ValueError, OSError):
         return []
-    return format_doctor_order_section(build_order_report(selection.to_run))
+    return format_doctor_order_section(
+        build_order_report(selection.to_run),
+        resolve_run_authority(tool_names=selection.to_run),
+    )
 
 
 def render_doctor_order_section(console: Console) -> None:

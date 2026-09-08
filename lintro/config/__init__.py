@@ -20,6 +20,7 @@ from lintro.config.config_loader import (
     load_config,
 )
 from lintro.config.lintro_config import (
+    AuthorityConfig,
     EnforceConfig,
     ExecutionConfig,
     LintroConfig,
@@ -34,6 +35,7 @@ from lintro.config.tool_config_generator import (
 
 __all__ = [
     # Config dataclasses
+    "AuthorityConfig",
     "EnforceConfig",
     "ExecutionConfig",
     "LintroConfig",

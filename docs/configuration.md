@@ -979,13 +979,60 @@ Execution order (derived from tool claims)
   Cycles (0): the derived graph is a DAG.
 ```
 
-### Format authority on Python
+### Format authority
 
-`*.py` is the one pattern in the 42-tool set with two mutating claimants. Black holds
-`{FORMAT}` and ruff holds `{FIX, FORMAT}`, so black owns the format phase (fewest
-mutating capabilities wins) and ruff is demoted to its fix capability: when black is in
-the run, ruff's `format` / `format_check` stages are switched off unless you ask for
-them explicitly through `--tool-options` or `[tool.lintro.ruff]`.
+At most one tool holds `FORMAT` for a given pattern (issue #1744). The owner is resolved
+in this order:
+
+1. **`authority.format` in your config** — an explicit override per pattern.
+2. **The owner table** in `lintro/tools/core/authority.py`, consulted only when the tool
+   it names is actually in the run.
+3. **Rule (d): fewest mutating capabilities wins** — a tool whose only mutating
+   capability is `FORMAT` is a dedicated formatter and outranks a multi-capability tool.
+
+`*.py` and `*.pyi` are the only patterns in the builtin set with two `FORMAT` claimants.
+Black holds `{FORMAT, CHECK}` and ruff holds `{FIX, FORMAT, CHECK}`, so black owns the
+format phase and ruff is **demoted, not dropped**: it keeps `FIX` and `CHECK`, and only
+its `format` / `format_check` stages are switched off — unless you ask for them
+explicitly through `--tool-options` or `[tool.lintro.ruff]`.
+
+To pick a different owner:
+
+```yaml
+authority:
+  format:
+    '*.py': ruff
+```
+
+An entry naming a tool that does not claim `FORMAT` on that pattern is reported and
+ignored rather than obeyed: obeying it would leave the pattern with no formatter at all.
+
+Every demotion is disclosed in the run summary, and `lintro check --explain-order` and
+`lintro doctor` name the owner, the tools it beat, and how it was chosen.
+
+### Concessions
+
+Owning `FORMAT` settles who rewrites a file. Concessions settle who is allowed to
+complain about the result: a tool that yields `FORMAT` on a pattern must not emit
+format-class diagnostics about it. Each concession uses an upstream preset where one
+exists, and hand-authored suppression only as a fallback:
+
+| Owner    | Yielder       | Patterns                  | Mechanism                                                                          |
+| -------- | ------------- | ------------------------- | ---------------------------------------------------------------------------------- |
+| prettier | html-validate | `*.html`                  | official `html-validate:prettier` preset                                           |
+| black    | ruff          | `*.py`, `*.pyi`           | ruff's published formatter-conflict rules, plus `E501`                             |
+| prettier | stylelint     | `*.css`/`*.scss`/`*.less` | none needed — upstream dropped formatting rules in `stylelint-config-standard` v15 |
+
+A concession applies only when its owner is actually in the run: with prettier
+deselected, html-validate keeps its own `recommended` preset. The
+`html-validate:prettier` preset is skipped when the project ships its own
+`.htmlvalidate.*`, because a user config is the user's decision.
+
+Every `(owner, yielder, filetype)` triple is guarded by a round-trip fixture test in
+`tests/integration/test_format_concessions.py`: format a fixture with the owner, run the
+yielder over the result, assert zero format-class findings. Both real binaries run, so
+the test fails when _either_ tool changes version — which is when a concession actually
+breaks.
 
 ### Mutate-then-verify (`lintro format`)
 

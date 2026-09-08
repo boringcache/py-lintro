@@ -18,12 +18,23 @@ the pinned devDependency to add instead (see issue #1767).
 No configuration is required: when no ``.htmlvalidate.*`` config is found,
 html-validate applies its built-in ``html-validate:recommended`` preset, so the
 tool produces sensible results out of the box.
+
+That default is also where dual authority used to live. ``recommended`` owns
+``void-style``, ``doctype-style`` and ``attr-quotes``, and prettier writes all
+three the other way, so a run that let prettier format ``*.html`` then failed
+the file it had just formatted. When prettier owns ``*.html`` for ``FORMAT``
+(#1744) the executor sets ``concession_preset``, and the recommended preset is
+joined by the official ``prettier`` preset, which exists to switch exactly
+those rules off. A project that ships its own ``.htmlvalidate.*`` is left
+alone: a user config is the user's decision, and html-validate ignores
+``--preset`` once one is present anyway.
 """
 
 from __future__ import annotations
 
 import subprocess  # nosec B404 - used safely with shell disabled
 from dataclasses import dataclass
+from pathlib import Path
 
 from loguru import logger
 
@@ -49,6 +60,10 @@ from lintro.tools.core.node_fallback import (
 # Constants for html-validate configuration
 HTML_VALIDATE_DEFAULT_TIMEOUT: int = 30
 HTML_VALIDATE_FILE_PATTERNS: list[str] = ["*.html", "*.htm", "*.vue", "*.svelte"]
+#: html-validate's own default preset. Named explicitly whenever a
+#: concession adds one, because ``--preset`` replaces the default set.
+HTML_VALIDATE_DEFAULT_PRESET: str = "recommended"
+
 HTML_VALIDATE_CONFIG_FILENAMES: list[str] = [
     ".htmlvalidate.json",
     ".htmlvalidate.js",
@@ -114,6 +129,7 @@ class HtmlValidatePlugin(BaseToolPlugin):
             min_version=get_min_version(ToolName.HTML_VALIDATE),
             default_options={
                 "timeout": HTML_VALIDATE_DEFAULT_TIMEOUT,
+                "concession_preset": "",
             },
             default_timeout=HTML_VALIDATE_DEFAULT_TIMEOUT,
         )
@@ -133,6 +149,32 @@ class HtmlValidatePlugin(BaseToolPlugin):
         if code:
             return DocUrlTemplate.HTML_VALIDATE.format(code=code)
         return None
+
+    @staticmethod
+    def _concession_preset_args(*, preset: str, cwd: str | None) -> list[str]:
+        """Build the ``--preset`` arguments for a format concession.
+
+        Args:
+            preset: Preset the executor asked for (``"prettier"``), or an
+                empty string when nothing is conceded.
+            cwd: Directory html-validate will run in, or None for the process
+                working directory.
+
+        Returns:
+            ``["--preset", "recommended,<preset>"]``, or an empty list when no
+            concession applies or the project ships its own
+            ``.htmlvalidate.*``. The default preset is named explicitly
+            because ``--preset`` replaces the default rather than adding to
+            it.
+        """
+        if not preset:
+            return []
+        root = Path(cwd) if cwd else Path.cwd()
+        if any(
+            (root / filename).exists() for filename in HTML_VALIDATE_CONFIG_FILENAMES
+        ):
+            return []
+        return ["--preset", f"{HTML_VALIDATE_DEFAULT_PRESET},{preset}"]
 
     @staticmethod
     def _append_fallback_guidance(
@@ -210,6 +252,12 @@ class HtmlValidatePlugin(BaseToolPlugin):
         used_registry_fallback: bool = is_registry_fallback_command(cmd)
         fallback_command: list[str] = list(cmd[:2])
         cmd.extend(["--formatter", "json"])
+        cmd.extend(
+            self._concession_preset_args(
+                preset=str(self.options.get("concession_preset", "") or ""),
+                cwd=ctx.cwd,
+            ),
+        )
 
         # Always pass the literal files lintro discovered, never a glob or a
         # directory: html-validate expands those through ``fs.globSync``, which

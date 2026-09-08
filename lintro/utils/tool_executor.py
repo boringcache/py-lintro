@@ -6,12 +6,15 @@ The execute/render split from issue #1823 keeps execution AI-free while
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import TYPE_CHECKING, Any
 
 from lintro.enums.action import Action, normalize_action
 from lintro.models.core.run_artifact import RunArtifact
 from lintro.models.core.tool_result import ToolResult
+from lintro.tools import authority as authority_module
+from lintro.tools import concessions as concessions_module
 from lintro.tools import tool_manager, verify_pass
 from lintro.utils.execution.exit_codes import (
     DEFAULT_EXIT_CODE_FAILURE,
@@ -171,6 +174,7 @@ def _execute_tools_parallel(
     effective_auto_install: bool,
     diff_base: str | None,
     on_tool_result: Callable[[ToolResult], None] | None,
+    authority: authority_module.FormatAuthority,
 ) -> list[ToolResult]:
     """Run every selected tool concurrently and collect their results.
 
@@ -188,6 +192,7 @@ def _execute_tools_parallel(
         effective_auto_install: Resolved auto-install setting.
         diff_base: Resolved ``--diff`` base ref, or ``None``.
         on_tool_result: Optional per-result display callback.
+        authority: Format authority resolved once for this run.
 
     Returns:
         list[ToolResult]: Results for every tool that ran.
@@ -211,6 +216,7 @@ def _execute_tools_parallel(
         auto_install=effective_auto_install,
         max_fix_retries=ctx.lintro_config.execution.max_fix_retries,
         diff_base=diff_base,
+        authority=authority,
     )
 
     # Enrich parallel results with doc_url from each plugin
@@ -222,6 +228,18 @@ def _execute_tools_parallel(
             # Unresolvable tool: the parallel dispatcher already recorded a
             # failure result for it, so there is nothing to enrich.
             continue
+
+    # Format concessions (#1744): drop the diagnostics a tool agreed not to
+    # raise about a pattern it does not own. Applied before display so the
+    # per-tool table shows what the run actually holds against the code.
+    all_results = [
+        concessions_module.apply_format_concessions(
+            result=result,
+            authority=authority,
+            selected_tools=selected_tools,
+        )
+        for result in all_results
+    ]
 
     # Dry-run: restrict each result to would-fix issues before totals and
     # display so non-auto-fixable diagnostics don't inflate the count.
@@ -254,6 +272,7 @@ def _execute_tools_sequential(
     effective_auto_install: bool,
     diff_base: str | None,
     on_tool_result: Callable[[ToolResult], None] | None,
+    authority: authority_module.FormatAuthority,
 ) -> list[ToolResult]:
     """Run every selected tool one at a time and collect their results.
 
@@ -271,6 +290,7 @@ def _execute_tools_sequential(
         effective_auto_install: Resolved auto-install setting.
         diff_base: Resolved ``--diff`` base ref, or ``None``.
         on_tool_result: Optional per-result display callback.
+        authority: Format authority resolved once for this run.
 
     Returns:
         list[ToolResult]: Results for every tool that ran, including synthetic
@@ -309,6 +329,7 @@ def _execute_tools_sequential(
                 auto_install=effective_auto_install,
                 lintro_config=ctx.lintro_config,
                 diff_base=diff_base,
+                authority=authority,
             )
 
             # Execute the tool
@@ -326,6 +347,14 @@ def _execute_tools_sequential(
 
             # Populate doc_url on each issue from the plugin
             _enrich_issues_with_doc_urls(tool, result)
+
+            # Format concessions (#1744): drop the diagnostics this tool
+            # agreed not to raise about a pattern it does not own.
+            result = concessions_module.apply_format_concessions(
+                result=result,
+                authority=authority,
+                selected_tools=selected_tools,
+            )
 
             # Dry-run: restrict to issues a real fmt would actually fix so the
             # displayed tables, counts, and exit code exclude non-auto-fixable
@@ -380,6 +409,7 @@ def _run_verify_phase(
     include_venv: bool,
     effective_auto_install: bool,
     diff_base: str | None,
+    authority: authority_module.FormatAuthority,
 ) -> None:
     """Run the single verify pass and fold its residual into the run.
 
@@ -404,6 +434,7 @@ def _run_verify_phase(
         include_venv: Whether to include virtual environment directories.
         effective_auto_install: Resolved auto-install setting.
         diff_base: Resolved ``--diff`` base ref, or ``None``.
+        authority: Format authority resolved once for this run.
     """
     if not baseline.candidates:
         return
@@ -434,6 +465,7 @@ def _run_verify_phase(
             auto_install=effective_auto_install,
             lintro_config=ctx.lintro_config,
             diff_base=diff_base,
+            authority=authority,
         )
 
     if not ctx.clean_stdout_output:
@@ -453,11 +485,28 @@ def _run_verify_phase(
         if not any(r.name == name and (r.skipped or r.timed_out) for r in all_results)
     ]
 
-    verify_outcomes = verify_pass.run_verify_pass(
-        tools_to_run=foldable,
-        scope=scope,
-        configure=_configure_for_verify,
-    )
+    # The residual concedes exactly what the mutation phase conceded: a
+    # verify CHECK that re-raised the owner's layout would undo the whole
+    # point of the concession.
+    verify_outcomes = [
+        (
+            dataclasses.replace(
+                outcome,
+                result=concessions_module.apply_format_concessions(
+                    result=outcome.result,
+                    authority=authority,
+                    selected_tools=set(tools_to_run),
+                ),
+            )
+            if outcome.result is not None
+            else outcome
+        )
+        for outcome in verify_pass.run_verify_pass(
+            tools_to_run=foldable,
+            scope=scope,
+            configure=_configure_for_verify,
+        )
+    ]
     verify_pass.fold_verify_results(
         mutation_results=all_results,
         verify_results=verify_outcomes,
@@ -656,6 +705,18 @@ def execute_run(
                 early_exit=True,
             )
 
+    # Format authority (#1744). Resolved once, from the tools this run
+    # actually selected: an owner that is not running cannot demote anyone.
+    # Disclosed whenever it took something away, so an authority decision is
+    # never invisible.
+    run_authority = authority_module.resolve_run_authority(
+        tool_names=tools_to_run,
+        overrides=dict(lintro_config.authority.format),
+    )
+    if not ctx.clean_stdout_output:
+        for line in authority_module.authority_summary_lines(run_authority):
+            logger.console_output(text=line, color="cyan")
+
     # Mutate-then-verify (#1743). Fingerprint every file a mutating capability
     # could rewrite *before* the mutation phase, so the verify pass that
     # follows can be narrowed to the files that actually moved. ``chk`` and
@@ -689,6 +750,7 @@ def execute_run(
         effective_auto_install=effective_auto_install,
         diff_base=resolved_diff_base,
         on_tool_result=on_tool_result,
+        authority=run_authority,
     )
 
     for result in all_results:
@@ -709,6 +771,7 @@ def execute_run(
         include_venv=include_venv,
         effective_auto_install=effective_auto_install,
         diff_base=resolved_diff_base,
+        authority=run_authority,
     )
 
     if use_parallel:

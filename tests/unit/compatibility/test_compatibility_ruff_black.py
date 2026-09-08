@@ -12,7 +12,9 @@ from assertpy import assert_that
 if TYPE_CHECKING:
     pass
 
+from lintro.enums.capability import Cap
 from lintro.enums.tool_name import ToolName
+from lintro.models.core.claim import Claim
 from lintro.models.core.tool_result import ToolResult
 from lintro.tools import tool_manager
 from lintro.utils.execution.tool_configuration import ToolsToRunResult
@@ -22,27 +24,43 @@ from lintro.utils.tool_executor import run_lint_tools_simple
 
 @dataclass
 class FakeToolDefinition:
-    """Fake ToolDefinition for testing."""
+    """Fake ToolDefinition for testing.
+
+    ``claims`` is populated for real: format authority (#1744) resolves the
+    ruff/black contest from declared capabilities, so a stub without claims
+    would let these tests pass without any demotion happening.
+    """
 
     name: str
     can_fix: bool = False
     description: str = ""
     file_patterns: list[str] = field(default_factory=list)
     native_configs: list[str] = field(default_factory=list)
+    claims: list[Claim] = field(default_factory=list)
 
 
 class FakeTool:
     """Simple stub representing a tool with check/fix capability."""
 
-    def __init__(self, name: ToolName, can_fix: bool) -> None:
+    def __init__(
+        self,
+        name: ToolName,
+        can_fix: bool,
+        capabilities: set[Cap],
+    ) -> None:
         """Initialize stub tool.
 
         Args:
             name: Tool name.
             can_fix: Whether the tool can apply fixes.
+            capabilities: Capabilities the stub claims on ``*.py``.
         """
         self.name = name
-        self._definition = FakeToolDefinition(name=str(name), can_fix=can_fix)
+        self._definition = FakeToolDefinition(
+            name=str(name),
+            can_fix=can_fix,
+            claims=[Claim(patterns=["*.py"], capabilities=capabilities)],
+        )
         self.options: dict[str, Any] = {}
 
     @property
@@ -150,8 +168,16 @@ def _setup_tools(monkeypatch: pytest.MonkeyPatch) -> tuple[FakeTool, FakeTool]:
     """
     import lintro.utils.tool_executor as te
 
-    ruff = FakeTool(ToolName.RUFF, can_fix=True)
-    black = FakeTool(ToolName.BLACK, can_fix=True)
+    ruff = FakeTool(
+        ToolName.RUFF,
+        can_fix=True,
+        capabilities={Cap.FIX, Cap.FORMAT, Cap.CHECK},
+    )
+    black = FakeTool(
+        ToolName.BLACK,
+        can_fix=True,
+        capabilities={Cap.FORMAT, Cap.CHECK},
+    )
     tool_map = {ToolName.RUFF: ruff, ToolName.BLACK: black}
 
     def fake_get_tools(
@@ -228,7 +254,7 @@ def test_ruff_formatting_disabled_when_black_present(
     )
 
     assert_that(code).is_equal_to(0)
-    assert_that(ruff.options.get("format")).is_false()
+    assert_that(ruff.options.get("format")).is_equal_to(False)
 
 
 def test_ruff_formatting_respects_cli_override(
@@ -285,4 +311,4 @@ def test_ruff_format_check_disabled_in_check_when_black_present(
     )
 
     assert_that(code).is_equal_to(0)
-    assert_that(ruff.options.get("format_check")).is_false()
+    assert_that(ruff.options.get("format_check")).is_equal_to(False)

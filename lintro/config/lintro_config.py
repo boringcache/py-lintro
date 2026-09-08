@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lintro.config.authority_config import AuthorityConfig
 from lintro.config.deps_config import DepsConfig
 from lintro.config.enforce_config import EnforceConfig
 from lintro.config.execution_config import ExecutionConfig
@@ -13,6 +14,7 @@ from lintro.config.tool_config import LintroToolConfig
 from lintro.config.watch_config import WatchConfig
 
 __all__ = [
+    "AuthorityConfig",
     "DepsConfig",
     "EnforceConfig",
     "ExecutionConfig",
@@ -67,6 +69,7 @@ class LintroConfig(BaseModel):
         output: Console output presentation settings (e.g. ASCII art toggle).
         watch: Watch-mode (``lintro watch``) defaults.
         deps: Dependency version policy configuration.
+        authority: Per-pattern ``FORMAT`` owner overrides (#1744).
         config_path: Path to the project config file (set by loader).
         global_config_path: Path to the user-level global config file, if one
             was found and merged (set by loader).
@@ -86,6 +89,7 @@ class LintroConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     watch: WatchConfig = Field(default_factory=WatchConfig)
     deps: DepsConfig = Field(default_factory=DepsConfig)
+    authority: AuthorityConfig = Field(default_factory=AuthorityConfig)
     config_path: str | None = None
     global_config_path: str | None = None
     global_contributed_keys: list[str] = Field(default_factory=list)

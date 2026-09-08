@@ -6,15 +6,19 @@ import pytest
 from assertpy import assert_that
 
 from lintro.cli_utils.order_explain import (
+    AUTHORITY_HEADER,
     DERIVED_NOTE,
     EXPLAIN_HEADER,
     MAX_DOCTOR_CONSTRAINTS,
     MAX_EDGES_PER_TOOL,
     emit_order_explanation,
+    format_authority_section,
     format_doctor_order_section,
     format_order_report,
 )
 from lintro.enums.capability import Cap
+from lintro.models.core.claim import Claim
+from lintro.tools.core.authority import resolve_format_authority
 from lintro.tools.core.scheduler import DerivedOrder, OrderCycle, OrderEdge
 
 GOLDEN_REPORT: list[str] = [
@@ -156,3 +160,53 @@ def test_emit_order_explanation_reports_an_unknown_tool(
 
     assert_that(excinfo.value.code).is_equal_to(1)
     assert_that(capsys.readouterr().err).is_not_empty()
+
+
+def test_the_order_explanation_names_the_format_owner() -> None:
+    """``--explain-order`` shows who owns FORMAT, not just who runs when."""
+    authority = resolve_format_authority(
+        claims_by_tool={
+            "ruff": [
+                Claim(
+                    patterns=["*.py"],
+                    capabilities={Cap.FIX, Cap.FORMAT, Cap.CHECK},
+                ),
+            ],
+            "black": [
+                Claim(patterns=["*.py"], capabilities={Cap.FORMAT, Cap.CHECK}),
+            ],
+        },
+    )
+    lines = format_order_report(_report(), authority)
+
+    assert_that("\n".join(lines)).contains(
+        AUTHORITY_HEADER,
+        "*.py: black owns FORMAT",
+        "demoted ruff",
+    )
+
+
+def test_the_order_explanation_omits_authority_when_nothing_is_contested() -> None:
+    """Forty uncontested owners would bury the decisions actually made."""
+    authority = resolve_format_authority(
+        claims_by_tool={
+            "black": [Claim(patterns=["*.py"], capabilities={Cap.FORMAT})],
+        },
+    )
+
+    assert_that(format_authority_section(authority)).is_empty()
+
+
+def test_the_doctor_section_reports_the_demotion() -> None:
+    """Doctor is the drift detector, so it names the demotion too."""
+    authority = resolve_format_authority(
+        claims_by_tool={
+            "ruff": [
+                Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.FORMAT}),
+            ],
+            "black": [Claim(patterns=["*.py"], capabilities={Cap.FORMAT})],
+        },
+    )
+    lines = format_doctor_order_section(_report(), authority)
+
+    assert_that("\n".join(lines)).contains("demoted ruff")

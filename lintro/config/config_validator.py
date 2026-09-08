@@ -28,6 +28,7 @@ from lintro.config.config_loader import (
     known_config_tool_names,
 )
 from lintro.config.lintro_config import (
+    AuthorityConfig,
     EnforceConfig,
     ExecutionConfig,
     LintroConfig,
@@ -68,6 +69,7 @@ KNOWN_TOOL_KEYS: frozenset[str] = frozenset(LintroToolConfig.model_fields)
 KNOWN_REVIEW_KEYS: frozenset[str] = frozenset(ReviewConfig.model_fields)
 KNOWN_OUTPUT_KEYS: frozenset[str] = frozenset(OutputConfig.model_fields)
 KNOWN_WATCH_KEYS: frozenset[str] = frozenset(WatchConfig.model_fields)
+KNOWN_AUTHORITY_KEYS: frozenset[str] = frozenset(AuthorityConfig.model_fields)
 
 # Sections whose typed parser calls ``.get``/``.items`` on its input without a
 # type guard. YAML spells an empty section as ``enforce:`` which deserializes
@@ -534,6 +536,7 @@ def _check_raw_pyproject_lintro(
         "review": KNOWN_REVIEW_KEYS,
         "output": KNOWN_OUTPUT_KEYS,
         "watch": KNOWN_WATCH_KEYS,
+        "authority": KNOWN_AUTHORITY_KEYS,
     }
 
     for key, value in data.items():
@@ -657,6 +660,7 @@ def _schema_check_normalized(
             ("review", KNOWN_REVIEW_KEYS),
             ("output", KNOWN_OUTPUT_KEYS),
             ("watch", KNOWN_WATCH_KEYS),
+            ("authority", KNOWN_AUTHORITY_KEYS),
         ):
             data = parsed.get(section)
             if isinstance(data, dict):
