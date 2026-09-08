@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from lintro.cli_utils.commands.config_ai import print_ai_config
+from lintro.cli_utils.commands.config_ai import ai_config_json, print_ai_config
 from lintro.cli_utils.commands.init import init_command
 from lintro.config import LintroConfig, get_config
 from lintro.config.config_validator import ValidationResult, validate_config_file
@@ -468,6 +468,7 @@ def _output_json(
         "tool_execution_order": [
             {"tool": t, "position": index} for index, t in enumerate(ordered_tools, 1)
         ],
+        "ai": ai_config_json(config),
         "tool_configs": {},
         "warnings": validate_config_consistency(),
     }

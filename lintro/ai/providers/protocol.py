@@ -20,11 +20,14 @@ Example:
     >>> from lintro.ai.enums import AITransport
     >>> from lintro.ai.provider_enum import AIProvider
     >>>
+    >>> from lintro.ai.provider_config import ProviderConfig
+    >>>
     >>> @dataclass(frozen=True, kw_only=True)
     ... class ExamplePlugin:
     ...     name: AIProvider = AIProvider.ANTHROPIC
     ...     transports: frozenset[AITransport] = frozenset({AITransport.API})
     ...     metadata: ProviderMetadata = ...
+    ...     config_model: type[ProviderConfig] = ProviderConfig
     ...
     ...     def build(self, config):  # -> BaseAIProvider
     ...         ...
@@ -58,9 +61,12 @@ __all__ = [
 #:
 #: Bump this only on a breaking change to :class:`ProviderPlugin` or
 #: :class:`ProviderMetadata`. It exists so a future entry-point loader has a
-#: compatibility handle to check; v1 discovery is in-tree only, so nothing
-#: reads it yet.
-PROVIDER_PLUGIN_API_VERSION: int = 1
+#: compatibility handle to check; discovery is in-tree only, so nothing reads
+#: it yet.
+#:
+#: v2 (#2309) added the required ``config_model`` member: a v1 plugin no longer
+#: satisfies the protocol, which is exactly the case this handle exists for.
+PROVIDER_PLUGIN_API_VERSION: int = 2
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)

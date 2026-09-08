@@ -12,19 +12,26 @@ behaviour those criteria depend on:
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import click
 import pytest
 import yaml
 from assertpy import assert_that
 from click.testing import CliRunner
 from loguru import logger
+from rich.console import Console
 
 from lintro.ai.config import AIConfig
-from lintro.ai.config_overrides import ENV_PROVIDER_BLOCK_PREFIX
+from lintro.ai.config_overrides import (
+    _ENABLED_ACCEPTED,
+    ENV_PROVIDER_BLOCK_PREFIX,
+)
 from lintro.ai.doctor_checks import check_ai_configuration
 from lintro.ai.effective_config import AICliOverrides, resolve_effective_ai_config
 from lintro.ai.enums import CliBareMode
@@ -43,6 +50,9 @@ from lintro.ai.providers.cursor.config import CursorConfig, cursor_settings
 from lintro.ai.providers.openai.config import OpenAIConfig, openai_settings
 from lintro.ai.registry import all_metadata, config_model_for, provider_config_models
 from lintro.cli import cli
+from lintro.cli_utils.commands.config_ai import print_ai_config
+from lintro.cli_utils.commands.review import _parse_provider_options
+from lintro.config import LintroConfig
 from lintro.config.config_loader import clear_config_cache
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -60,11 +70,53 @@ _DECLARATION_ONLY = frozenset(
     },
 )
 
+
+@dataclass(frozen=True)
+class _FakeLintroConfig:
+    """The one attribute :func:`print_ai_config` reads off a loaded config.
+
+    Attributes:
+        ai: Raw ``ai:`` mapping, exactly as the loader stores it.
+    """
+
+    ai: dict[str, Any] = field(default_factory=dict)
+
+
 _TRUST_KEY = nested_source_key(
     provider=AIProvider.CURSOR,
     field="trust_workspace",
 )
 _ENV_TRUST = f"{ENV_PROVIDER_BLOCK_PREFIX}CURSOR__TRUST_WORKSPACE"
+
+
+@pytest.fixture
+def isolated_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    """Return an empty project directory with the user tier isolated.
+
+    The loader deep-merges ``~/.lintro-config.yaml`` into the project config,
+    so a contributor's own AI settings would otherwise reach every test that
+    goes through ``load_config``.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        The project directory, already the working directory.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.delenv("LINTRO_GLOBAL_CONFIG", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    clear_config_cache()
+    return project
 
 
 @pytest.fixture(autouse=True)
@@ -77,29 +129,6 @@ def _rearm_legacy_warnings() -> Iterator[None]:
     reset_legacy_key_warnings()
     yield
     reset_legacy_key_warnings()
-
-
-@pytest.fixture
-def _no_block_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove any ambient provider-block override from the environment.
-
-    Args:
-        monkeypatch: Pytest monkeypatch fixture.
-    """
-    for name in list(os_environ_names()):
-        if name.startswith(ENV_PROVIDER_BLOCK_PREFIX):
-            monkeypatch.delenv(name, raising=False)
-
-
-def os_environ_names() -> tuple[str, ...]:
-    """Return the current environment variable names.
-
-    Returns:
-        The names, snapshotted so the caller may delete while iterating.
-    """
-    import os
-
-    return tuple(os.environ)
 
 
 # -- AC1: no single-provider field survives on AIConfig --------------------
@@ -145,22 +174,29 @@ def test_no_top_level_field_belongs_to_a_single_provider() -> None:
     shared pipeline is the shape #2309 exists to prevent: it reads as a global
     setting but means nothing for the other providers. The remedy is to move it
     into that provider's ``ai.providers.<name>`` block, not to widen this test.
+
+    The evidence is a name match over source text, so it is a lower bound: a
+    field named in a comment or docstring counts as a mention, and a field no
+    one reads at all passes. That is deliberate — the alternative is modelling
+    attribute access, which a plugin can defeat with ``getattr`` — so the
+    guard catches the regression it is aimed at (a new vendor knob landing on
+    the flat model) and does not pretend to prove consumption.
     """
     provider_sources = _provider_package_sources()
     shared = _shared_sources()
 
     offenders: dict[str, str] = {}
-    for field in AIConfig.model_fields:
-        if field == "providers":
+    for field_name in AIConfig.model_fields:
+        if field_name == "providers":
             continue
-        pattern = re.compile(rf"\b{re.escape(field)}\b")
+        pattern = re.compile(rf"\b{re.escape(field_name)}\b")
         owners = [
             provider.value
             for provider, source in provider_sources.items()
             if pattern.search(source)
         ]
         if len(owners) == 1 and not pattern.search(shared):
-            offenders[field] = owners[0]
+            offenders[field_name] = owners[0]
 
     assert_that(offenders).described_as(
         "top-level ai fields consumed by exactly one provider",
@@ -190,7 +226,6 @@ def test_the_moved_knobs_live_on_their_own_provider_block() -> None:
 # -- AC2: provenance across flag / env / project / user --------------------
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_nested_field_default_provenance() -> None:
     """An untouched nested field resolves to its model default."""
     resolved = resolve_effective_ai_config({"provider": "cursor"})
@@ -199,7 +234,6 @@ def test_nested_field_default_provenance() -> None:
     assert_that(resolved.sources[_TRUST_KEY]).is_equal_to(ConfigSource.DEFAULT)
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_nested_field_project_provenance() -> None:
     """A value written under ``ai.providers`` is reported as config."""
     resolved = resolve_effective_ai_config(
@@ -245,7 +279,6 @@ def test_nested_field_flag_beats_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert_that(resolved.sources[_TRUST_KEY]).is_equal_to(ConfigSource.FLAG)
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_nested_field_from_the_user_global_config(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -306,7 +339,6 @@ def test_nested_field_from_the_user_global_config(
     clear_config_cache()
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_one_overlay_leaves_the_rest_of_the_block_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -333,7 +365,6 @@ def test_one_overlay_leaves_the_rest_of_the_block_alone(
 # -- Diagnostics -----------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_unknown_block_field_is_rejected_where_it_was_written() -> None:
     """A key the provider does not declare fails, naming the full path.
 
@@ -350,11 +381,17 @@ def test_unknown_block_field_is_rejected_where_it_was_written() -> None:
     assert_that(str(excinfo.value)).contains("ai.providers.cursor.workspace_trust")
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_unknown_provider_block_is_dropped_with_a_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A block for a provider lintro has never heard of does not break the run.
+
+    Deliberately asymmetric with the override layers, which hard-fail on the
+    same input (see ``test_env_override_names_an_unknown_provider``). A stale
+    key in a committed config file must not break every run — that is how
+    unrecognized top-level ``ai:`` keys already behave — whereas an override
+    typed for this invocation silently doing nothing is worse than one that
+    stops the run.
 
     Args:
         caplog: Pytest log capture fixture.
@@ -418,10 +455,12 @@ def test_env_override_rejects_a_bad_value(
     with pytest.raises(AIConfigOverrideError) as excinfo:
         resolve_effective_ai_config({})
 
-    assert_that(str(excinfo.value)).contains("true, false")
+    # The accepted-values text is lintro's, shared with the flat overrides;
+    # importing it keeps this from pinning a private spelling of the same list.
+    assert_that(str(excinfo.value)).contains(_ENABLED_ACCEPTED)
+    assert_that(str(excinfo.value)).contains(_ENV_TRUST)
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_provider_option_flag_without_a_provider_is_an_error() -> None:
     """``--provider-option`` needs to know which provider it is talking to."""
     with pytest.raises(AIConfigOverrideError) as excinfo:
@@ -435,7 +474,6 @@ def test_provider_option_flag_without_a_provider_is_an_error() -> None:
     assert_that(str(excinfo.value)).contains("--provider-option")
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_provider_option_flag_binds_to_the_provider_flag() -> None:
     """``--provider`` in the same invocation decides whose block is written."""
     resolved = resolve_effective_ai_config(
@@ -452,10 +490,79 @@ def test_provider_option_flag_binds_to_the_provider_flag() -> None:
     )
 
 
+# -- The --provider-option flag parser -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        (("trust_workspace=false",), {"trust_workspace": "false"}),
+        (("a=1", "b=2"), {"a": "1", "b": "2"}),
+        # A repeated name keeps the last value, like every other override.
+        (("a=1", "a=2"), {"a": "2"}),
+        # Only the first '=' separates; the rest belongs to the value.
+        (("a=b=c",), {"a": "b=c"}),
+        # An empty value is a value: emptiness is the block model's problem.
+        (("a=",), {"a": ""}),
+        ((" a =1",), {"a": "1"}),
+        ((), {}),
+    ],
+)
+def test_provider_option_flag_parsing(
+    values: tuple[str, ...],
+    expected: dict[str, str],
+) -> None:
+    """The flag splits on the first ``=`` and holds no per-vendor knowledge.
+
+    Args:
+        values: Raw ``--provider-option`` values as Click collects them.
+        expected: The mapping handed to the resolver.
+    """
+    assert_that(_parse_provider_options(values=values)).is_equal_to(expected)
+
+
+@pytest.mark.parametrize("value", ["trust_workspace", "=false", " =false", ""])
+def test_provider_option_flag_rejects_a_malformed_pair(value: str) -> None:
+    """A value that is not ``NAME=VALUE`` is a usage error, not a silent skip.
+
+    Args:
+        value: The malformed flag value.
+    """
+    with pytest.raises(click.UsageError) as excinfo:
+        _parse_provider_options(values=(value,))
+
+    assert_that(str(excinfo.value)).contains("NAME=VALUE")
+
+
+def test_review_rejects_an_unknown_provider_option(
+    isolated_project: Path,
+) -> None:
+    """``lintro review`` surfaces the resolver's rejection as a usage error.
+
+    Args:
+        isolated_project: Empty project directory with the user tier isolated.
+    """
+    (isolated_project / ".lintro-config.yaml").write_text(
+        yaml.safe_dump(
+            {"ai": {"enabled": True, "review": True, "provider": "cursor"}},
+        ),
+        encoding="utf-8",
+    )
+    clear_config_cache()
+
+    result = CliRunner().invoke(
+        cli,
+        ["review", "--provider-option", "trust_workspaces=false"],
+    )
+
+    clear_config_cache()
+    assert_that(result.exit_code).is_not_equal_to(0)
+    assert_that(result.output).contains("trust_workspace")
+
+
 # -- AC3: the legacy shim --------------------------------------------------
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_legacy_key_is_still_honoured() -> None:
     """A legacy top-level key still reaches the provider that reads it."""
     resolved = resolve_effective_ai_config(
@@ -466,7 +573,72 @@ def test_legacy_key_is_still_honoured() -> None:
     assert_that(resolved.sources[_TRUST_KEY]).is_equal_to(ConfigSource.CONFIG)
 
 
-@pytest.mark.usefixtures("_no_block_env")
+def test_anthropic_legacy_key_is_still_honoured() -> None:
+    """``ai.cli_bare`` still reaches the Anthropic block.
+
+    Anthropic's mapping is the identity case — the legacy key and the nested
+    field share a name — so it exercises the migration's pop/setdefault
+    sequence differently from cursor's renamed key.
+    """
+    resolved = resolve_effective_ai_config(
+        {"provider": "anthropic", "cli_bare": "never"},
+    )
+
+    assert_that(anthropic_settings(resolved.config).cli_bare).is_equal_to(
+        CliBareMode.NEVER,
+    )
+    assert_that(
+        resolved.sources[
+            nested_source_key(provider=AIProvider.ANTHROPIC, field="cli_bare")
+        ],
+    ).is_equal_to(ConfigSource.CONFIG)
+
+
+@pytest.mark.parametrize(
+    ("legacy_key", "path"),
+    sorted(
+        (key, path)
+        for key, path in __import__(
+            "lintro.ai.provider_config",
+            fromlist=["legacy_key_field_paths"],
+        )
+        .legacy_key_field_paths()
+        .items()
+    ),
+)
+def test_every_declared_legacy_key_migrates_and_warns(
+    legacy_key: str,
+    path: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No provider may declare a legacy spelling the shim does not honour.
+
+    Parametrised over the registry rather than a hand-written list, so a
+    provider that adds a legacy key gets this coverage for free — and the
+    removal issue (#2464) has one place to delete.
+
+    Args:
+        legacy_key: The top-level spelling a provider still accepts.
+        path: The ``providers.<name>.<field>`` path it maps to.
+        caplog: Pytest log capture fixture.
+    """
+    _, provider_name, block_field = path.split(".")
+    model = config_model_for(provider_name)
+    default = getattr(model(), block_field)
+
+    handler_id = logger.add(caplog.handler, format="{message}")
+    try:
+        resolved = resolve_effective_ai_config({legacy_key: default})
+    finally:
+        logger.remove(handler_id)
+
+    settings = resolved.config.provider_settings(AIProvider(provider_name))
+    assert_that(getattr(settings, block_field)).is_equal_to(default)
+    assert_that(resolved.sources[path]).is_equal_to(ConfigSource.CONFIG)
+    assert_that(caplog.text).contains(f"ai.{legacy_key} is deprecated")
+    assert_that(caplog.text).contains(f"ai.{path}")
+
+
 def test_legacy_key_warning_text_names_the_new_path(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -488,22 +660,35 @@ def test_legacy_key_warning_text_names_the_new_path(
     )
 
 
-def test_legacy_key_warning_text_is_shared_with_the_helper() -> None:
-    """The pinned text comes from one builder, not two hand-written copies."""
-    assert_that(
+def test_legacy_key_warning_is_built_once_and_logged_verbatim(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """What the run logs is exactly what the builder produced.
+
+    The prose itself is pinned once, in
+    :func:`test_legacy_key_warning_text_names_the_new_path`. Copying it here
+    too would mean a rewording had to be applied in two places to stay green,
+    which is the drift this asserts against — so this checks the property
+    (one builder, no second copy) rather than the text.
+
+    Args:
+        caplog: Pytest log capture fixture.
+    """
+    handler_id = logger.add(caplog.handler, format="{message}")
+    try:
+        resolve_effective_ai_config({"cli_bare": "never"})
+    finally:
+        logger.remove(handler_id)
+
+    assert_that(caplog.messages).contains(
         legacy_key_warning(
             legacy_key="cli_bare",
             provider="anthropic",
             field="cli_bare",
         ),
-    ).is_equal_to(
-        "ai.cli_bare is deprecated and will be removed in a future release "
-        f"(#{LEGACY_KEY_REMOVAL_ISSUE}); move it to "
-        "ai.providers.anthropic.cli_bare.",
     )
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_legacy_key_warns_once_per_run(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -529,7 +714,6 @@ def test_legacy_key_warns_once_per_run(
     )
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_nested_value_wins_over_the_legacy_key() -> None:
     """The shim is a fallback, never an override of the new spelling."""
     resolved = resolve_effective_ai_config(
@@ -542,7 +726,6 @@ def test_nested_value_wins_over_the_legacy_key() -> None:
     assert_that(cursor_settings(resolved.config).trust_workspace).is_false()
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_a_real_typo_is_still_reported_as_unknown(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -568,20 +751,15 @@ def test_a_real_typo_is_still_reported_as_unknown(
 # -- Display surfaces ------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_lintro_config_shows_only_the_selected_provider_block(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    isolated_project: Path,
 ) -> None:
     """``lintro config`` renders one block plus a count of the others.
 
     Args:
-        tmp_path: Pytest temporary directory.
-        monkeypatch: Pytest monkeypatch fixture.
+        isolated_project: Empty project directory with the user tier isolated.
     """
-    project = tmp_path / "project"
-    project.mkdir()
-    (project / ".lintro-config.yaml").write_text(
+    (isolated_project / ".lintro-config.yaml").write_text(
         yaml.safe_dump(
             {
                 "ai": {
@@ -596,7 +774,6 @@ def test_lintro_config_shows_only_the_selected_provider_block(
         ),
         encoding="utf-8",
     )
-    monkeypatch.chdir(project)
     clear_config_cache()
 
     result = CliRunner().invoke(cli, ["config"])
@@ -609,7 +786,103 @@ def test_lintro_config_shows_only_the_selected_provider_block(
     assert_that(output).contains("1 other provider block configured")
 
 
-@pytest.mark.usefixtures("_no_block_env")
+def test_lintro_config_json_carries_the_same_block(
+    isolated_project: Path,
+) -> None:
+    """``--json`` reports the block the rich section shows, with provenance.
+
+    Args:
+        isolated_project: Empty project directory with the user tier isolated.
+    """
+    (isolated_project / ".lintro-config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "ai": {
+                    "provider": "cursor",
+                    "providers": {
+                        "cursor": {"trust_workspace": False},
+                        "anthropic": {"cli_bare": "never"},
+                    },
+                },
+            },
+        ),
+        encoding="utf-8",
+    )
+    clear_config_cache()
+
+    result = CliRunner().invoke(cli, ["config", "--json"])
+
+    clear_config_cache()
+    assert_that(result.exit_code).is_equal_to(0)
+    payload = json.loads(result.output)["ai"]
+    assert_that(payload["provider"]).is_equal_to("cursor")
+    assert_that(payload["provider_settings"]).is_equal_to(
+        {"trust_workspace": {"value": False, "source": "config"}},
+    )
+    assert_that(payload["other_provider_blocks"]).is_equal_to(1)
+
+
+def test_lintro_config_survives_an_invalid_provider_block(
+    isolated_project: Path,
+) -> None:
+    """A bad block costs the AI section, not the whole report.
+
+    ``lintro config`` is what a user runs to diagnose a bad config, so it must
+    still render the sections after the AI one.
+
+    Args:
+        isolated_project: Empty project directory with the user tier isolated.
+    """
+    (isolated_project / ".lintro-config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "ai": {
+                    "provider": "cursor",
+                    "providers": {"cursor": {"trust_workspace": "maybe"}},
+                },
+            },
+        ),
+        encoding="utf-8",
+    )
+    clear_config_cache()
+
+    result = CliRunner().invoke(cli, ["config"])
+
+    clear_config_cache()
+    assert_that(result.exit_code).is_equal_to(0)
+    output = " ".join(result.output.split())
+    assert_that(output).contains("ai.providers.cursor.trust_workspace")
+    assert_that(output).contains("Tool Execution Order")
+
+
+def test_ai_config_section_names_a_provider_with_no_settings() -> None:
+    """A provider whose block model is empty says so rather than rendering none."""
+    console = Console(record=True, width=100)
+
+    print_ai_config(
+        console=console,
+        config=cast(LintroConfig, _FakeLintroConfig({"provider": "openai"})),
+    )
+
+    text = " ".join(console.export_text().split())
+    assert_that(text).contains("providers.openai")
+    assert_that(text).contains("no provider-specific settings")
+    assert_that(text).does_not_contain("other provider block")
+
+
+def test_ai_config_section_reports_no_provider() -> None:
+    """With no provider selected the shared rows still render."""
+    console = Console(record=True, width=100)
+
+    print_ai_config(
+        console=console,
+        config=cast(LintroConfig, _FakeLintroConfig({})),
+    )
+
+    text = " ".join(console.export_text().split())
+    assert_that(text).contains("provider unset")
+
+
 def test_doctor_reports_the_selected_provider_block() -> None:
     """Doctor names the non-default settings of the provider in use."""
     config = AIConfig(
@@ -626,7 +899,6 @@ def test_doctor_reports_the_selected_provider_block() -> None:
     assert_that(names["ai.providers.cursor"]).contains("trust_workspace=False")
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_doctor_stays_quiet_when_the_block_is_all_defaults() -> None:
     """A default-valued block is not worth a doctor row."""
     config = AIConfig(
@@ -644,7 +916,6 @@ def test_doctor_stays_quiet_when_the_block_is_all_defaults() -> None:
 # -- Accessors -------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_provider_settings_defaults_to_the_selected_provider() -> None:
     """``provider_settings()`` reads the configured provider's block."""
     config = AIConfig(
@@ -657,7 +928,6 @@ def test_provider_settings_defaults_to_the_selected_provider() -> None:
     )
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_provider_settings_synthesises_a_missing_block() -> None:
     """An unwritten block reads as that provider's defaults, never None."""
     config = AIConfig(provider=AIProvider.OPENAI)
@@ -669,7 +939,6 @@ def test_provider_settings_synthesises_a_missing_block() -> None:
     assert_that(config.other_provider_block_count()).is_equal_to(0)
 
 
-@pytest.mark.usefixtures("_no_block_env")
 def test_blocks_survive_a_dump_and_revalidate_round_trip() -> None:
     """Overlays copy the config through pydantic; nested fields must survive.
 

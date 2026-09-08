@@ -96,7 +96,11 @@ def legacy_key_warning(*, legacy_key: str, provider: str, field: str) -> str:
     )
 
 
-def migrate_legacy_provider_keys(data: dict[str, Any]) -> dict[str, Any]:
+def migrate_legacy_provider_keys(
+    data: dict[str, Any],
+    *,
+    diagnostics: bool = True,
+) -> dict[str, Any]:
     """Fold legacy top-level provider keys into ``ai.providers.<name>``.
 
     Each provider's block model declares its own legacy spellings on
@@ -107,6 +111,11 @@ def migrate_legacy_provider_keys(data: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         data: Raw ``ai:`` mapping. Not mutated.
+        diagnostics: Whether this parse may emit the deprecation. Display-only
+            callers pass False, like every other migration hint on this path:
+            a summary re-parses the mapping the execution path already
+            reported on and must not duplicate its output. Suppressed keys are
+            not marked as warned, so the execution path still says its piece.
 
     Returns:
         A copy with legacy keys removed and their values moved under
@@ -139,7 +148,7 @@ def migrate_legacy_provider_keys(data: dict[str, Any]) -> dict[str, Any]:
         block.setdefault(field, value)
         providers.pop(provider, None)
         providers[key] = block
-        if legacy in _LEGACY_KEYS_WARNED:
+        if not diagnostics or legacy in _LEGACY_KEYS_WARNED:
             continue
         _LEGACY_KEYS_WARNED.add(legacy)
         message = legacy_key_warning(

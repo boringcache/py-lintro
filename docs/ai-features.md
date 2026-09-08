@@ -1055,11 +1055,15 @@ ai:
 ```
 
 Each block is declared and validated by the provider's own plugin
-(`lintro/ai/providers/<name>/config.py`), so a key that means nothing to your provider
-is rejected where you wrote it rather than silently ignored, and switching providers
-never means re-reading which top-level keys still apply. Blocks for providers you are
-not using are kept but not applied; `lintro config` shows only the selected provider's
-block and a one-line count of the rest.
+(`lintro/ai/providers/<name>/config.py`), so a setting that vendor does not understand
+is rejected under the key you wrote it, and switching providers never means re-reading
+which top-level keys still apply. A block for a provider lintro does not know is dropped
+with a warning naming it, matching how an unrecognized top-level `ai:` key is treated —
+whereas an unknown provider or field in an **override** (`LINTRO_AI_PROVIDERS__…` or
+`--provider-option`) is a hard error, because an override that silently does nothing is
+worse than one that stops the run. Blocks for providers you are not using are kept but
+not applied; `lintro config` shows only the selected provider's block and a one-line
+count of the rest.
 
 Nested settings resolve on exactly the same layers as the shared ones — **flag > env >
 project config > user config > default** — and carry the same per-field provenance,
@@ -1071,6 +1075,15 @@ which `lintro config` prints in parentheses.
 | Env     | `LINTRO_AI_PROVIDERS__CURSOR__TRUST_WORKSPACE=false` — the prefix, the provider, and the field, upper-cased and joined by **double** underscores |
 | Project | `ai.providers.cursor.trust_workspace` in `.lintro-config.yaml`                                                                                   |
 | User    | the same key in the user-level `~/.lintro-config.yaml`, overridden per project                                                                   |
+
+> **One exception — `LINTRO_CLI_BARE`.** The Anthropic CLI transport reads
+> `LINTRO_CLI_BARE` itself, _after_ resolution, so it outranks every layer above for
+> `ai.providers.anthropic.cli_bare` — config, `LINTRO_AI_PROVIDERS__ANTHROPIC__CLI_BARE`
+> and `--provider-option cli_bare=…` alike. `lintro config` reports the resolved value
+> and its provenance, which is therefore not the value the run uses when that variable
+> is set. It predates the nested block
+> ([#1838](https://github.com/lgtm-hq/py-lintro/issues/1838)); no other provider setting
+> has a second path.
 
 The available settings today:
 

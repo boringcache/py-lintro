@@ -253,7 +253,8 @@ def test_metadata_exposes_pricing_keys_without_importing_a_sdk() -> None:
 
     assert_that(metadata.pricing_keys).is_equal_to(("fake-model",))
     assert_that(metadata.provider).is_equal_to(AIProvider.ANTHROPIC)
-    assert_that(PROVIDER_PLUGIN_API_VERSION).is_equal_to(1)
+    # v2 since #2309 added the required ``config_model`` member.
+    assert_that(PROVIDER_PLUGIN_API_VERSION).is_equal_to(2)
 
 
 @pytest.mark.parametrize(

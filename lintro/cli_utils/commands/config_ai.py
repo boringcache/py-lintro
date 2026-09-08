@@ -7,7 +7,7 @@ one provider's nested block rather than a flat table like every other section.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.table import Table
 
@@ -16,7 +16,34 @@ if TYPE_CHECKING:
 
     from lintro.config import LintroConfig
 
-__all__ = ["print_ai_config"]
+__all__ = ["ai_config_json", "print_ai_config"]
+
+
+def _describe_failure(exc: Exception) -> str:
+    """Render a resolution failure as one line for the report row.
+
+    A pydantic error's first line is a count ("1 validation error for
+    AIConfig"), so its own message is used instead — that is the text the
+    nested-block validator wrote, naming the ``ai.providers.<name>.<field>``
+    path the user typed.
+
+    Args:
+        exc: The resolution failure to describe.
+
+    Returns:
+        A single line naming what is wrong.
+    """
+    from pydantic import ValidationError
+
+    if isinstance(exc, ValidationError):
+        errors = exc.errors()
+        if errors:
+            message = str(errors[0].get("msg", "")).strip()
+            return message.removeprefix("Value error, ") or type(exc).__name__
+    for line in str(exc).splitlines():
+        if line.strip():
+            return line.strip()
+    return type(exc).__name__
 
 
 def print_ai_config(
@@ -38,6 +65,8 @@ def print_ai_config(
         console: Rich console to print to.
         config: Loaded Lintro configuration.
     """
+    from pydantic import ValidationError
+
     from lintro.ai.effective_config import resolve_effective_ai_config
     from lintro.ai.exceptions import AIConfigOverrideError
     from lintro.ai.provider_blocks import nested_source_key
@@ -45,8 +74,11 @@ def print_ai_config(
 
     try:
         resolved = resolve_effective_ai_config(config.ai, diagnostics=False)
-    except AIConfigOverrideError as exc:
-        console.print(f"[bold]AI Settings[/bold]  [red]{exc}[/red]")
+    except (AIConfigOverrideError, ValidationError) as exc:
+        # A bad ``ai:`` block degrades this section to one line rather than
+        # killing the report: ``lintro config`` is the command a user runs to
+        # diagnose a bad config, so it must still print the rest of it.
+        console.print(f"[bold]AI Settings[/bold]  [red]{_describe_failure(exc)}[/red]")
         console.print()
         return
 
@@ -102,7 +134,66 @@ def print_ai_config(
     if others:
         plural = "s" if others != 1 else ""
         console.print(
-            f"[dim]  {others} other provider block{plural} configured "
-            f"(not shown; select one with ai.provider)[/dim]",
+            f"[dim]  {others} other provider block{plural} configured; "
+            f"not shown because ai.provider selects "
+            f"{provider.value if provider is not None else 'none'}[/dim]",
         )
     console.print()
+
+
+def ai_config_json(config: LintroConfig) -> dict[str, Any]:
+    """Return the AI section of ``lintro config --json``.
+
+    The same shape the rich section renders, so the two outputs cannot drift:
+    the shared settings with provenance, only the selected provider's block,
+    and a count of the others.
+
+    Args:
+        config: Loaded Lintro configuration.
+
+    Returns:
+        A JSON-serializable mapping. A configuration that fails to resolve
+        yields ``{"error": ...}`` rather than raising, so ``--json`` degrades
+        the same way the rich report does.
+    """
+    from pydantic import ValidationError
+
+    from lintro.ai.effective_config import resolve_effective_ai_config
+    from lintro.ai.exceptions import AIConfigOverrideError
+    from lintro.ai.provider_blocks import nested_source_key
+
+    try:
+        resolved = resolve_effective_ai_config(config.ai, diagnostics=False)
+    except (AIConfigOverrideError, ValidationError) as exc:
+        return {"error": _describe_failure(exc)}
+
+    ai_config = resolved.config
+    provider = ai_config.provider
+    output: dict[str, Any] = {
+        "provider": provider.value if provider is not None else None,
+        "transport": (
+            ai_config.transport.value if ai_config.transport is not None else None
+        ),
+        "model": ai_config.model,
+        "sources": {
+            field: str(resolved.sources[field])
+            for field in ("provider", "transport", "model")
+            if field in resolved.sources
+        },
+        "provider_settings": {},
+        "other_provider_blocks": ai_config.other_provider_block_count(),
+    }
+    if provider is None:
+        return output
+
+    settings = ai_config.provider_settings(provider)
+    block: dict[str, Any] = {}
+    for name in sorted(type(settings).model_fields):
+        value = getattr(settings, name)
+        key = nested_source_key(provider=provider, field=name)
+        block[name] = {
+            "value": getattr(value, "value", value),
+            "source": str(resolved.sources[key]) if key in resolved.sources else None,
+        }
+    output["provider_settings"] = block
+    return output

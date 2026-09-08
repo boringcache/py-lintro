@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import subprocess  # nosec B404 - only CompletedProcess objects are constructed here
 import threading
 from collections.abc import Iterator
@@ -15,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lintro.ai.config import AIConfig
+from lintro.ai.config_overrides import ENV_PROVIDER_BLOCK_PREFIX
 from lintro.ai.enums import AITransport
 from lintro.ai.models import AIFixSuggestion
 from lintro.ai.providers.base import AIResponse, BaseAIProvider
@@ -386,6 +388,22 @@ class MockIssue(BaseIssue):
     code: str = ""
     severity: str = ""
     fixable: bool = False
+
+
+@pytest.fixture(autouse=True)
+def _clear_provider_block_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unset every ``LINTRO_AI_PROVIDERS__*`` override for the whole AI suite.
+
+    These variables are resolved for any config parse, so one exported in the
+    developer's shell would silently change what an assertion about a
+    provider block observes (#2309). The flat ``LINTRO_AI_*`` overrides are
+    left alone: tests that care set them explicitly.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+    """
+    for name in [n for n in os.environ if n.startswith(ENV_PROVIDER_BLOCK_PREFIX)]:
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture

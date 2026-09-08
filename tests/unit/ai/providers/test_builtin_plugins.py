@@ -282,9 +282,11 @@ def test_unknown_provider_message_is_unchanged() -> None:
 
 def test_recognized_provider_without_a_plugin_reports_what_is_implemented() -> None:
     """A known name with no plugin keeps the "not implemented" ``ValueError``."""
-    # Built before the registry is cleared: constructing a config may consult
-    # the plugin registry, which would re-register the very plugins this test
-    # removes.
+    # Built before the registry is cleared. Constructing a config consults the
+    # plugin registry whenever it has a ``providers`` block or an unrecognized
+    # key to migrate, and that load would re-register the very plugins this
+    # test removes. This config has neither today, so the hoist is insurance
+    # against a future field making it matter, not a live requirement.
     config = AIConfig(provider=AIProvider.ANTHROPIC)
     saved = all_providers()
     clear_registered()

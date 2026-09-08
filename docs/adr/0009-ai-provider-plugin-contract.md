@@ -84,8 +84,9 @@ restates, for the provider seam, the invariants ADR-0008 records for review.
 **6. Nothing is migrated by the phase that introduces this contract.** The protocol, the
 registry and this ADR land alone. `get_provider` keeps its class map until the migration
 phase ([#2307](https://github.com/lgtm-hq/py-lintro/issues/2307)) moves Anthropic,
-OpenAI and Cursor behind registration and deletes it. Until then the registry is empty
-at runtime and exercised only by tests.
+OpenAI and Cursor behind registration and deletes it. That migration has since landed:
+every in-tree provider registers a plugin, and #2309 added `config_model` to the
+contract, so the registry is populated at runtime and is the only lookup path.
 
 ### Non-goals
 

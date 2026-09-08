@@ -26,6 +26,7 @@ from lintro.ai.config import AIConfig
 from lintro.ai.enums import AITransport
 from lintro.ai.enums.config_source import ConfigSource
 from lintro.ai.exceptions import AIConfigOverrideError
+from lintro.ai.provider_blocks import nested_source_key
 from lintro.ai.provider_config import ProviderConfig
 from lintro.ai.provider_enum import AIProvider, accepted_provider_values
 from lintro.ai.resolved_ai_config import ResolvedAIConfig
@@ -319,7 +320,9 @@ def apply_env_overrides(
         sources[field] = ConfigSource.ENV
     for provider, fields in blocks.items():
         for field in fields:
-            sources[f"providers.{provider.value}.{field}"] = ConfigSource.ENV
+            sources[nested_source_key(provider=provider, field=field)] = (
+                ConfigSource.ENV
+            )
     return updated, sources
 
 
@@ -400,7 +403,9 @@ def apply_cli_overrides(
         sources[field] = ConfigSource.FLAG
     for provider, fields in blocks.items():
         for field in fields:
-            sources[f"providers.{provider.value}.{field}"] = ConfigSource.FLAG
+            sources[nested_source_key(provider=provider, field=field)] = (
+                ConfigSource.FLAG
+            )
     return ResolvedAIConfig(config=updated, sources=sources)
 
 

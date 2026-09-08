@@ -448,7 +448,10 @@ class AIConfig(BaseModel):
         # spelling, and only then is the plugin registry worth loading. A
         # well-formed config never pays for the shim.
         if set(migrated) - set(cls.model_fields):
-            migrated = migrate_legacy_provider_keys(migrated)
+            migrated = migrate_legacy_provider_keys(
+                migrated,
+                diagnostics=not _SUPPRESS_DIAGNOSTICS.get(),
+            )
         raw_blocks = migrated.get("providers")
         if not isinstance(raw_blocks, Mapping) or not raw_blocks:
             return migrated
@@ -470,6 +473,10 @@ class AIConfig(BaseModel):
                         name,
                     )
                 continue
+            if value is None:
+                # ``cursor:`` with nothing under it is an empty YAML mapping,
+                # which is how a user writes "this provider, all defaults".
+                value = {}
             if not isinstance(value, Mapping):
                 raise ValueError(
                     f"ai.providers.{provider_label(name)} must be a mapping "
