@@ -245,6 +245,11 @@ def test_resolve_verify_scope_narrows_to_files_whose_fingerprint_moved(
     untouched = tmp_path / "untouched.py"
     touched.write_text("x = 1\n", encoding="utf-8")
     untouched.write_text("y = 2\n", encoding="utf-8")
+    # Seed both files with a sub-second mtime BEFORE the snapshot: on a
+    # whole-second filesystem the baseline would otherwise be unreliable and
+    # resolve would take the floor instead of narrowing.
+    for path in (touched, untouched):
+        os.utime(path, (1_700_000_000.25, 1_700_000_000.25))
     candidates = (str(touched), str(untouched))
     baseline = VerifyBaseline(
         candidates=candidates,
@@ -395,6 +400,41 @@ def test_fold_replaces_the_tools_own_residual_without_double_counting() -> None:
     assert_that(folded.issues_count).is_equal_to(1)
     assert_that(folded.fixed_issues_count).is_equal_to(9)
     assert_that(folded.output).contains("Verify pass: 1 issue(s) remain")
+
+
+def test_fold_keeps_a_failed_mutation_failed_even_with_no_residual() -> None:
+    """A failed fmt command cannot be laundered into success by a clean verify."""
+    mutation = ToolResult(
+        name="taplo",
+        success=False,
+        output="taplo fmt: error: could not parse config",
+        issues_count=0,
+        issues=[],
+        initial_issues=[],
+        initial_issues_count=0,
+        fixed_issues_count=0,
+        remaining_issues_count=0,
+        capability=Cap.FORMAT,
+    )
+    verify = ToolResult(
+        name="taplo",
+        success=True,
+        issues_count=0,
+        issues=[],
+        capability=Cap.CHECK,
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="taplo", result=verify)],
+        scope=VerifyScope(files=("/repo/a.toml",), narrowed=True),
+    )
+
+    folded = results[0]
+    assert_that(folded.success).is_false()
+    assert_that(folded.remaining_issues_count).is_equal_to(0)
+    assert_that(folded.output).contains("could not parse config")
 
 
 def test_fold_catches_a_residual_a_later_tool_reintroduced() -> None:
