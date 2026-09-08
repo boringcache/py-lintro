@@ -256,6 +256,9 @@ def test_resolve_verify_scope_narrows_to_files_whose_fingerprint_moved(
         snapshot=snapshot_fingerprints(candidates),
     )
 
+    if not baseline.snapshot.is_reliable:
+        pytest.skip("filesystem stores whole-second mtimes; narrowing cannot apply")
+
     os.utime(touched, (1_700_000_000.5, 1_700_000_000.5))
     scope = resolve_verify_scope(baseline)
 
@@ -435,6 +438,42 @@ def test_fold_keeps_a_failed_mutation_failed_even_with_no_residual() -> None:
     assert_that(folded.success).is_false()
     assert_that(folded.remaining_issues_count).is_equal_to(0)
     assert_that(folded.output).contains("could not parse config")
+
+
+def test_fold_keeps_pre_fix_issues_when_the_check_timed_out() -> None:
+    """A CHECK that timed out verified nothing: pre-fix findings are carried."""
+    mutation = ToolResult(
+        name="ruff",
+        success=True,
+        output="Fixed 1 issue(s)",
+        issues_count=1,
+        issues=[_issue("/repo/a.py")],
+        initial_issues=[_issue("/repo/a.py"), _issue("/repo/a.py")],
+        initial_issues_count=2,
+        fixed_issues_count=1,
+        remaining_issues_count=1,
+        capability=Cap.FIX,
+    )
+    verify = ToolResult(
+        name="ruff",
+        success=False,
+        output="ruff check timed out",
+        issues_count=0,
+        issues=[],
+        timed_out=True,
+        capability=Cap.CHECK,
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
+        scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
+    )
+
+    folded = results[0]
+    assert_that(folded.success).is_false()
+    assert_that(folded.remaining_issues_count).is_equal_to(2)
 
 
 def test_fold_catches_a_residual_a_later_tool_reintroduced() -> None:
