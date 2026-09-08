@@ -16,6 +16,7 @@ from lintro.enums.capability import Cap
 from lintro.enums.tool_name import ToolName
 from lintro.models.core.claim import Claim
 from lintro.models.core.tool_result import ToolResult
+from lintro.parsers.base_issue import BaseIssue
 from lintro.tools import tool_manager
 from lintro.utils.execution.tool_configuration import ToolsToRunResult
 from lintro.utils.output import OutputManager
@@ -47,6 +48,7 @@ class FakeTool:
         name: ToolName,
         can_fix: bool,
         capabilities: set[Cap],
+        findings: list[Any] | None = None,
     ) -> None:
         """Initialize stub tool.
 
@@ -54,7 +56,9 @@ class FakeTool:
             name: Tool name.
             can_fix: Whether the tool can apply fixes.
             capabilities: Capabilities the stub claims on ``*.py``.
+            findings: Issues ``check`` should report, if any.
         """
+        self.findings = list(findings or [])
         self.name = name
         self._definition = FakeToolDefinition(
             name=str(name),
@@ -118,9 +122,15 @@ class FakeTool:
             options: Optional tool options.
 
         Returns:
-            ToolResult indicating success with zero issues.
+            ToolResult carrying whatever findings the stub was seeded with.
         """
-        return ToolResult(name=self.name, success=True, output="", issues_count=0)
+        return ToolResult(
+            name=self.name,
+            success=not self.findings,
+            output="",
+            issues_count=len(self.findings),
+            issues=list(self.findings),
+        )
 
     def fix(
         self,
@@ -312,3 +322,70 @@ def test_ruff_format_check_disabled_in_check_when_black_present(
 
     assert_that(code).is_equal_to(0)
     assert_that(ruff.options.get("format_check")).is_equal_to(False)
+
+
+@dataclass
+class _StubIssue(BaseIssue):
+    """Issue stub carrying only the rule code a concession filters on.
+
+    Attributes:
+        code: The rule code.
+    """
+
+    code: str = ""
+
+
+def test_a_conceded_ruff_finding_does_not_fail_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The concession has to survive the whole executor, not just the helper.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture for patching objects.
+    """
+    _stub_logger(monkeypatch)
+    ruff, _black = _setup_tools(monkeypatch)
+    ruff.findings = [_StubIssue(code="E501")]
+
+    code = run_lint_tools_simple(
+        action="check",
+        paths=["."],
+        tools="all",
+        tool_options=None,
+        exclude=None,
+        include_venv=False,
+        group_by="auto",
+        output_format="grid",
+        verbose=False,
+        raw_output=False,
+    )
+
+    assert_that(code).is_equal_to(0)
+
+
+def test_an_unconceded_ruff_finding_still_fails_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the format-class codes are conceded; the rest still count.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture for patching objects.
+    """
+    _stub_logger(monkeypatch)
+    ruff, _black = _setup_tools(monkeypatch)
+    ruff.findings = [_StubIssue(code="F401")]
+
+    code = run_lint_tools_simple(
+        action="check",
+        paths=["."],
+        tools="all",
+        tool_options=None,
+        exclude=None,
+        include_venv=False,
+        group_by="auto",
+        output_format="grid",
+        verbose=False,
+        raw_output=False,
+    )
+
+    assert_that(code).is_equal_to(1)

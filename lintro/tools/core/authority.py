@@ -356,6 +356,13 @@ def _is_demotable(tool: str) -> bool:
     naming its rival as owner would leave *both* formatting the pattern, the
     exact failure this module exists to prevent.
 
+    Only the override path consults this, because that is the only path a
+    user can steer into the unenforceable case. The table and rule (d) are
+    held to the same standard by a test rather than a runtime check —
+    ``test_every_owner_table_loser_can_actually_be_demoted`` fails a row
+    whose loser has no stage to switch off, which is the point at which a
+    new tool would introduce one.
+
     Args:
         tool: Registry name of the tool.
 
@@ -452,6 +459,14 @@ def resolve_format_authority(
                 continue
             lost_patterns.setdefault(loser, []).append(pattern)
             lost_to.setdefault(loser, (owner, source))
+
+    # An override whose pattern nobody claims never reaches the loop above, so
+    # it would otherwise be the one unusable entry that vanishes in silence.
+    ignored.extend(
+        (pattern, tool)
+        for pattern, tool in sorted(normalized_overrides.items())
+        if pattern not in claimants
+    )
 
     demotions = tuple(
         Demotion(

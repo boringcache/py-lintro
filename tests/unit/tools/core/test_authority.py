@@ -16,6 +16,7 @@ from lintro.enums.capability import Cap
 from lintro.models.core.claim import Claim
 from lintro.tools import tool_manager
 from lintro.tools.core.authority import (
+    FORMAT_DEMOTION_OPTIONS,
     FORMAT_OWNER_TABLE,
     FormatOwnerRow,
     OwnerSource,
@@ -279,3 +280,34 @@ def test_demotion_disables_the_stage_that_belongs_to_the_action(
 def test_a_tool_with_no_formatting_stage_is_demoted_in_reporting_only() -> None:
     """Nothing to switch off is not a reason to invent a flag."""
     assert_that(demotion_options(tool="prettier", action=Action.FIX)).is_empty()
+
+
+def test_every_owner_table_loser_can_actually_be_demoted() -> None:
+    """A demotion nothing can enforce leaves two tools formatting one pattern.
+
+    The override path refuses such a pairing at runtime; the table and rule
+    (d) are held to it here instead, because a row that cannot be enforced is
+    an authoring mistake rather than a user input.
+    """
+    claims = {
+        name: list(getattr(tool.definition, "claims", None) or ())
+        for name, tool in tool_manager.get_all_tools().items()
+    }
+    authority = resolve_format_authority(claims_by_tool=claims, overrides={})
+    unenforceable = [
+        demotion.tool
+        for demotion in authority.demotions
+        if demotion.tool not in FORMAT_DEMOTION_OPTIONS
+    ]
+
+    assert_that(unenforceable).is_empty()
+
+
+def test_an_override_for_a_pattern_nobody_claims_is_reported() -> None:
+    """A typo'd pattern is the entry most likely to vanish in silence."""
+    authority = resolve_format_authority(
+        claims_by_tool=_PY_CONTEST,
+        overrides={"*.pyx": "black"},
+    )
+
+    assert_that(authority.ignored_overrides).is_equal_to((("*.pyx", "black"),))

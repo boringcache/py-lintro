@@ -1090,25 +1090,22 @@ verify pass. So does `lintro format --dry-run`, which is a check-mode preview.
 Tools that declare no `CHECK` capability (prettier is `FORMAT`-only) have no residual to
 report and are not asked for one; they keep their own counts.
 
-### Ruff vs Black Policy (Python)
+### Ruff and black on Python
 
-Lintro enforces Ruff-first linting and Black-first formatting when Black is configured
-as a post-check.
+Black owns the `FORMAT` phase on `*.py` and `*.pyi`, and ruff is demoted to its `FIX`
+and `CHECK` capabilities. This falls out of [Format authority](#format-authority) — it
+is not a Python-specific rule, and it is no longer produced by the deleted `post_checks`
+mechanism.
 
-- Ruff: primary linter (keep strict rules like `COM812` trailing commas and `E501` line
-  length enabled for checks)
-- Black: primary formatter (applies formatting during post-checks; performs safe line
-  breaking where Ruff’s auto-format may be limited)
+What that means in a run where both are selected:
 
-Runtime behavior with Black as post-check:
-
-- lintro format
-  - Ruff fixes lint issues only (Ruff `format=False`) unless explicitly overridden
-  - Black performs formatting in the post-check phase
-
-- lintro check
-  - Ruff runs lint checks (Ruff `format_check=False`) unless explicitly overridden
-  - Black runs `--check` as a post-check to enforce formatting
+- `lintro format` — ruff fixes lint issues (`format=False`), black formats.
+- `lintro check` — ruff reports diagnostics (`format_check=False`), black runs
+  `--check`.
+- Ruff's formatter-conflicting rules are [conceded](#concessions) to black: `E501`,
+  `COM812`, `COM819`, `ISC001`, `ISC002`, `Q000`–`Q003`, `W191`, `E111`, `E114`, `E117`,
+  `D206` and `D300` are dropped from ruff's results, because black already decided the
+  layout those rules describe. Deselect black and ruff reports them again.
 
 Overrides when needed:
 
@@ -1120,12 +1117,9 @@ lintro format --tool-options ruff:format=True
 lintro check --tool-options ruff:format_check=True
 ```
 
-Rationale:
-
-- Avoids double-formatting churn (Ruff format followed by Black format) while preserving
-  Ruff’s stricter lint rules (e.g., `COM812`, `E501`).
-- Black’s safe wrapping is preferred for long lines; Ruff continues to enforce lint
-  limits during checks.
+An explicitly requested option outranks the demotion, so either of these puts ruff's
+formatting stage back — at the cost of two tools formatting the same file, which is what
+the authority rule exists to avoid.
 
 ### Node.js Tool Resolution {#nodejs-tool-resolution}
 

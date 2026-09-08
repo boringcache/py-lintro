@@ -28,15 +28,18 @@ as a fallback:
   bug in miniature.
 - **stylelint yields to prettier.** No action is required: upstream removed
   formatting rules from ``stylelint-config-standard`` in v15. The row exists
-  anyway so the round-trip test guards the claim — if a future stylelint
-  reintroduces layout rules, the fixture test fails instead of the user's
-  build.
+  anyway so the round trip proves the two agree on real CSS — prettier
+  rewrites the fixture's layout and stylelint, on the project's own config,
+  reports nothing about it. That is a narrower claim than "no stylelint
+  preset anywhere has layout rules", which no fixture can establish; the row
+  also asserts its own suppression set is empty, so quietly turning it into a
+  hand-authored suppression is what the test would catch.
 
 Every row is guarded by an executable round-trip test
 (``tests/integration/test_format_concessions.py``): format a fixture with the
-owner, run the yielder over the result, assert zero format-class findings.
-The table is a claim; the test is the proof, and it fires when *either* tool
-changes version.
+owner — asserting the owner really ran — then run the yielder over the result
+and assert zero format-class findings. The table is a claim; the test is the
+proof, and it fires when *either* tool changes version.
 """
 
 from __future__ import annotations
@@ -280,13 +283,47 @@ def apply_suppressions(
             # initial set once the residual is accounted for.
             changes["fixed_issues_count"] = max(initial - (remaining or 0), 0)
 
-    if not kept and not result.timed_out and not result.success:
+    # Every display path prefers the tool's own text when it has one, and
+    # re-parses it when the issue list is empty — which would resurrect the
+    # findings this function just dropped, under a summary line saying zero.
+    # The rendered form is always stale once anything is dropped; the raw text
+    # is only safe to keep while some finding still explains it.
+    changes["formatted_output"] = None
+    if not kept:
+        changes["output"] = None
+
+    if _only_findings_failed(result) and not kept:
         # Every finding was conceded, so the tool ran fine and has nothing to
         # report. Leaving success=False would fail the run on diagnostics the
         # concession exists to retire, with an empty table to explain it.
         changes["success"] = True
 
     return dataclasses.replace(result, **changes)  # type: ignore[arg-type]
+
+
+def _only_findings_failed(result: ToolResult) -> bool:
+    """Report whether a result's failure is explained by its findings alone.
+
+    ``success=False`` does not always mean "the tool found something". A fix
+    run also folds the mutation's own outcome into it — ruff reports failure
+    when the ``ruff format`` subprocess itself fails — so conceding findings
+    there would concede an execution failure with them. Only a result whose
+    count came entirely from the parsed check findings is safe to pass.
+
+    Args:
+        result: The result being filtered.
+
+    Returns:
+        True when flipping ``success`` would retire findings and nothing else.
+    """
+    return (
+        not result.success
+        and not result.timed_out
+        and not result.skipped
+        and result.remaining_issues_count is None
+        and result.issues is not None
+        and result.issues_count == len(result.issues)
+    )
 
 
 def apply_format_concessions(

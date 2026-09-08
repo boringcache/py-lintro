@@ -7,9 +7,10 @@ passes the yielder. Because both real binaries run, the test fails when
 *either* tool changes version — which is when the concession actually breaks,
 and is the reason the table is not trusted on its own.
 
-Each triple also pins a control: without the concession the yielder *does*
-complain. A round trip that would pass with the concession removed proves
-nothing.
+Each triple pins two things a round trip can otherwise fake. The owner must
+actually have run — a formatter that silently no-ops would leave every other
+assertion true — and the yielder must complain without the concession, or the
+test would pass with the concession deleted.
 """
 
 from __future__ import annotations
@@ -83,7 +84,7 @@ def test_prettier_output_passes_html_validate(tmp_path: Path) -> None:
         tmp_path: Temporary project directory.
     """
     target = _stage("prettier_html_validate.html", tmp_path)
-    PrettierPlugin().fix([str(target)], {})
+    formatted = PrettierPlugin().fix([str(target)], {})
 
     control = HtmlValidatePlugin()
     control_result = control.check([str(target)], {})
@@ -91,6 +92,8 @@ def test_prettier_output_passes_html_validate(tmp_path: Path) -> None:
     conceded.set_options(concession_preset="prettier")
     conceded_result = conceded.check([str(target)], {})
 
+    assert_that(formatted.success).is_true()
+    assert_that(formatted.skipped).is_false()
     assert_that(_codes(control_result) & HTML_FORMAT_CLASS_RULES).is_not_empty()
     assert_that(_codes(conceded_result) & HTML_FORMAT_CLASS_RULES).is_empty()
 
@@ -112,10 +115,11 @@ def test_prettier_output_passes_stylelint(tmp_path: Path) -> None:
     shutil.copy(STYLELINT_CONFIG, tmp_path / ".stylelintrc.json")
     target = _stage("prettier_stylelint.css", tmp_path)
     before = target.read_text(encoding="utf-8")
-    PrettierPlugin().fix([str(target)], {})
+    formatted = PrettierPlugin().fix([str(target)], {})
 
     result = StylelintPlugin().check([str(target)], {})
 
+    assert_that(formatted.success).is_true()
     assert_that(target.read_text(encoding="utf-8")).is_not_equal_to(before)
     assert_that(result.skipped).is_false()
     assert_that(result.issues_count).is_equal_to(0)
@@ -129,11 +133,16 @@ def test_prettier_output_passes_stylelint(tmp_path: Path) -> None:
 def test_black_output_passes_ruff(tmp_path: Path) -> None:
     """Black owns ``*.py``; ruff concedes the lines black leaves long.
 
+    The fixture is deliberately not black-clean, so the bytes changing is the
+    proof the owner ran: black's ``success`` is not usable here, because
+    lintro's black plugin reports the same long line itself.
+
     Args:
         tmp_path: Temporary project directory.
     """
     target = _stage("black_ruff.py", tmp_path)
-    BlackPlugin().fix([str(target)], {})
+    before = target.read_text(encoding="utf-8")
+    formatted = BlackPlugin().fix([str(target)], {})
 
     ruff = RuffPlugin()
     ruff.set_options(select=["E501"], format_check=False)
@@ -143,5 +152,7 @@ def test_black_output_passes_ruff(tmp_path: Path) -> None:
         codes=RUFF_FORMATTER_CONFLICT_CODES,
     )
 
+    assert_that(formatted.skipped).is_false()
+    assert_that(target.read_text(encoding="utf-8")).is_not_equal_to(before)
     assert_that(_codes(control)).contains("E501")
     assert_that(conceded.issues_count).is_equal_to(0)
