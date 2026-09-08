@@ -1025,10 +1025,9 @@ ai:
       # the agent CLI). Set false to restore the agent's interactive trust
       # prompt. (bool, default: true)
       trust_workspace: true
-    openai:
-      # OpenAI reads no vendor-only setting today; the block is recognized so
-      # a future one has a home.
-      {}
+    # OpenAI reads no vendor-only setting today; the block is recognized so
+    # a future one has a home.
+    openai: {}
 
   # ── Advanced / trust (leave off unless you understand the risk) ──
   # Let the git-native (CLI transport) review path delegate diff retrieval to
