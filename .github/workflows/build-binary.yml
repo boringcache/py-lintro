@@ -155,10 +155,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
-      # #2435: the reuse check lists and downloads this run's own sha256
-      # artifact (including earlier attempts) to decide whether the asset on
-      # the release is one this job already verified.
-      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -379,10 +375,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
-      # #2435: the reuse check lists and downloads this run's own sha256
-      # artifact (including earlier attempts) to decide whether the asset on
-      # the release is one this job already verified.
-      actions: read
     strategy:
       fail-fast: false
       matrix:
