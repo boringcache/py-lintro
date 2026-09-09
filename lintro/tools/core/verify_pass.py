@@ -593,6 +593,7 @@ def _verified_paths(
     *,
     scope: VerifyScope,
     verify: ToolResult | None,
+    fallback_cwd: str | None,
 ) -> set[str]:
     """Return every file the verify pass can be said to have covered.
 
@@ -613,6 +614,14 @@ def _verified_paths(
         scope: The file set the verify pass was asked to cover.
         verify: The tool's ``CHECK`` result, or ``None`` when it produced no
             verdict — in which case nothing was verified at all.
+        fallback_cwd: Directory to resolve the verify result's relative paths
+            against when it records none of its own. This is the mutation
+            result's ``cwd``: a tool's check and its fix run from the same
+            place (clippy and rustfmt from the crate root, everything else
+            from ``prepare``'s working directory), and only the fix side is
+            stamped today. Without it a crate-relative ``src/lib.rs`` would be
+            keyed under the *process* directory and match nothing, so the
+            union this function exists for would never engage.
 
     Returns:
         Absolute paths whose pre-fix findings are superseded.
@@ -621,7 +630,7 @@ def _verified_paths(
         return set()
     covered = set(scope.files)
     for issue in verify.issues or ():
-        path = _issue_path(issue, cwd=verify.cwd)
+        path = _issue_path(issue, cwd=verify.cwd or fallback_cwd)
         if path:
             covered.add(path)
     return covered
@@ -655,6 +664,7 @@ def _fold_one(
     verified_paths = _verified_paths(
         scope=scope,
         verify=verify if check_answered else None,
+        fallback_cwd=mutation.cwd,
     )
     survivors: list[BaseIssue] = [
         issue

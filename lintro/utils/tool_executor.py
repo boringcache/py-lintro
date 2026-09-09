@@ -405,6 +405,12 @@ def _run_verify_phase(
         effective_auto_install: Resolved auto-install setting.
         diff_base: Resolved ``--diff`` base ref, or ``None``.
     """
+    # Self-guarding rather than trusting the caller's empty-baseline sentinel:
+    # the docstring above promises this is a no-op outside a real ``fmt`` run,
+    # and that promise should hold locally rather than by a convention shared
+    # with ``execute_run``.
+    if ctx.action != Action.FIX or ctx.dry_run_preview:
+        return
     if not baseline.candidates:
         return
 
@@ -437,8 +443,16 @@ def _run_verify_phase(
         )
 
     if not ctx.clean_stdout_output:
+        # The per-tool tables above were streamed by the mutation phase, so
+        # their counts are pre-verify. Say so: the summary below can disagree
+        # with them, and a reader who is not told will trust the first number
+        # they saw.
         ctx.logger.console_output(
-            text=f"Verify pass: re-checking {scope.summary}",
+            text=(
+                f"Verify pass: re-checking {scope.summary} "
+                "(per-tool counts above are provisional; the summary below is "
+                "authoritative)"
+            ),
             color="cyan",
         )
 

@@ -8,7 +8,6 @@ degrading to the documented floor when fingerprints cannot be trusted.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -240,26 +239,41 @@ def test_capture_verify_baseline_covers_only_mutating_patterns(
 def test_resolve_verify_scope_narrows_to_files_whose_fingerprint_moved(
     tmp_path: Path,
 ) -> None:
-    """Only the rewritten file is verified; the untouched one is skipped."""
+    """Only the rewritten file is verified; the untouched one is skipped.
+
+    The snapshot is built from explicit fractional mtimes rather than from
+    ``os.utime`` plus a re-stat. A filesystem that coerces ``utime`` to
+    whole-second resolution — NFS, some Docker bind mounts — would otherwise
+    make the baseline unreliable and send this test down the floor path, and
+    the narrowing invariant it exists to pin would go unasserted on exactly
+    the CI images where it is hardest to notice.
+    """
     touched = tmp_path / "touched.py"
     untouched = tmp_path / "untouched.py"
     touched.write_text("x = 1\n", encoding="utf-8")
     untouched.write_text("y = 2\n", encoding="utf-8")
-    # Seed both files with a sub-second mtime BEFORE the snapshot: on a
-    # whole-second filesystem the baseline would otherwise be unreliable and
-    # resolve would take the floor instead of narrowing.
-    for path in (touched, untouched):
-        os.utime(path, (1_700_000_000.25, 1_700_000_000.25))
     candidates = (str(touched), str(untouched))
     baseline = VerifyBaseline(
         candidates=candidates,
-        snapshot=snapshot_fingerprints(candidates),
+        snapshot=FingerprintSnapshot(
+            fingerprints={
+                # A stale mtime for the file about to be "rewritten"...
+                str(touched): FileFingerprint(
+                    path=str(touched),
+                    mtime=1_700_000_000.25,
+                    size=touched.stat().st_size,
+                ),
+                # ...and the file's real state for the one that is not.
+                str(untouched): FileFingerprint(
+                    path=str(untouched),
+                    mtime=untouched.stat().st_mtime,
+                    size=untouched.stat().st_size,
+                ),
+            },
+        ),
     )
+    assert_that(baseline.snapshot.is_reliable).is_true()
 
-    if not baseline.snapshot.is_reliable:
-        pytest.skip("filesystem stores whole-second mtimes; narrowing cannot apply")
-
-    os.utime(touched, (1_700_000_000.5, 1_700_000_000.5))
     scope = resolve_verify_scope(baseline)
 
     assert_that(scope.narrowed).is_true()
@@ -1140,3 +1154,100 @@ def test_cli_excludes_are_split_and_reach_the_candidate_walk(
     assert_that(patterns[:2]).is_equal_to(["build", "dist"])
     # The built-in defaults and .lintro-ignore are appended after them.
     assert_that(patterns).contains(".git")
+
+
+def test_a_result_without_a_cwd_resolves_relative_paths_against_the_process_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The documented last resort, pinned so it cannot change unnoticed.
+
+    Every tool that reaches the fold stamps ``cwd`` today, but ``_issue_path``
+    still has to answer for one that does not. Falling back to the process
+    directory is the only thing it can do, and it is only correct when the
+    tool happened to run there — which is exactly why this is a footgun worth
+    having under test rather than an invisible branch.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        tmp_path: Directory the process is pretending to run in.
+    """
+    monkeypatch.chdir(tmp_path)
+    target = str(tmp_path / "a.py")
+    mutation = ToolResult(
+        name="ruff",
+        success=True,
+        issues_count=0,
+        issues=[],
+        # Relative, with no cwd recorded on the result.
+        initial_issues=[_issue("a.py"), _issue("elsewhere/b.py")],
+        initial_issues_count=2,
+        fixed_issues_count=2,
+        remaining_issues_count=0,
+        cwd=None,
+        capability=Cap.FIX,
+    )
+    verify = ToolResult(name="ruff", success=True, issues_count=0, issues=[])
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
+        scope=VerifyScope(files=(target,), narrowed=True),
+    )
+
+    folded = results[0]
+    # ``a.py`` resolved to the scoped file through the process directory and
+    # is therefore verified; the one outside it survives.
+    assert_that(folded.remaining_issues_count).is_equal_to(1)
+    assert_that([i.file for i in folded.issues or []]).is_equal_to(["elsewhere/b.py"])
+
+
+def test_a_verify_result_without_a_cwd_falls_back_to_the_mutations(
+    tmp_path: Path,
+) -> None:
+    """A check that records no directory is read in the fix's, not the process's.
+
+    Check-side results largely do not stamp ``cwd``: clippy's
+    ``BatchCheckPolicy`` leaves ``report_cwd`` off and ``execute_ruff_check``
+    sets none. A tool's check and its fix run from the same place, so the
+    mutation result's directory is the right key — and without it a
+    crate-relative ``src/lib.rs`` would resolve under the *process* directory,
+    match nothing in the scope, and the whole-project union would silently
+    never engage.
+
+    Args:
+        tmp_path: Stand-in for the crate root.
+    """
+    crate = str(tmp_path)
+    mutation = ToolResult(
+        name="clippy",
+        success=True,
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("src/lib.rs")],
+        initial_issues_count=1,
+        fixed_issues_count=1,
+        remaining_issues_count=0,
+        cwd=crate,
+        capability=Cap.FIX,
+    )
+    # Crate-relative path, no cwd of its own — the shape clippy really returns.
+    verify = ToolResult(
+        name="clippy",
+        success=False,
+        issues_count=1,
+        issues=[_issue("src/lib.rs")],
+        cwd=None,
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="clippy", result=verify)],
+        # The scope never named lib.rs: the crate-wide check answered for it.
+        scope=VerifyScope(files=(str(tmp_path / "src" / "main.rs"),), narrowed=True),
+    )
+
+    # One finding, not two: the pre-fix one is superseded, not added to.
+    assert_that(results[0].remaining_issues_count).is_equal_to(1)

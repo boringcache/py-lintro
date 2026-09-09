@@ -37,8 +37,10 @@ _ROOT_SEARCH_MAX_DEPTH: int = 20
 
 # Default exclude patterns for file discovery. Applied by every plugin's
 # discovery and by the run-level verify pass, so they live in the lowest layer
-# both can reach (#1743).
-DEFAULT_EXCLUDE_PATTERNS: list[str] = [
+# both can reach (#1743). A tuple rather than a list: this is shared process-
+# wide state now, and an in-place ``append`` at any call site would silently
+# widen the exclude set for every later run in the same process.
+DEFAULT_EXCLUDE_PATTERNS: tuple[str, ...] = (
     ".git",
     ".hg",
     ".svn",
@@ -52,7 +54,7 @@ DEFAULT_EXCLUDE_PATTERNS: list[str] = [
     "dist",
     "build",
     "*.egg-info",
-]
+)
 
 
 def setup_exclude_patterns(

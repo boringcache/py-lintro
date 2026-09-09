@@ -94,21 +94,36 @@ class _MutatingTool:
         """
         self.fix_calls += 1
         self._target.write_text("x = 2\n", encoding="utf-8")
+        detected = [
+            RuffIssue(
+                file=str(self._target),
+                line=1,
+                code="F401",
+                message="unused",
+            ),
+        ]
+        if self.time_out:
+            # What every real plugin reports on a deadline: nothing fixed,
+            # every issue it had already detected still remaining.
+            return ToolResult(
+                name="ruff",
+                success=False,
+                timed_out=True,
+                output="Ruff execution timed out",
+                issues_count=len(detected),
+                issues=detected,
+                initial_issues=detected,
+                initial_issues_count=len(detected),
+                fixed_issues_count=0,
+                remaining_issues_count=len(detected),
+            )
         return ToolResult(
             name="ruff",
-            success=not self.time_out,
-            timed_out=self.time_out,
+            success=True,
             output="Fixed 1 issue(s)",
             issues_count=0,
             issues=[],
-            initial_issues=[
-                RuffIssue(
-                    file=str(self._target),
-                    line=1,
-                    code="F401",
-                    message="unused",
-                ),
-            ],
+            initial_issues=detected,
             initial_issues_count=1,
             fixed_issues_count=1,
             remaining_issues_count=0,
@@ -435,7 +450,7 @@ def test_the_floor_of_an_incremental_run_stays_inside_that_runs_scope(
     # fingerprint layer would happily call changed, so a floor that re-widened
     # to the scan root — or narrowing that ignored the incremental set — would
     # put it in front of the CHECK. Neither does.
-    assert_that(out_of_scope.exists()).is_true()
+    assert_that(out_of_scope.read_text(encoding="utf-8")).is_equal_to("x = 1\n")
     assert_that(tool.checked_paths).is_equal_to([str(target)])
     assert_that(artifact.total_remaining).is_equal_to(1)
 
@@ -519,7 +534,7 @@ def test_a_timed_out_tool_is_not_asked_to_verify(
     tool.time_out = True
     monkeypatch.setattr(tool_manager, "get_tool", lambda name: tool)
 
-    _run_fmt(
+    artifact = _run_fmt(
         ctx=_fix_context(tmp_path=tmp_path, fake_logger=fake_logger),
         workspace=workspace,
     )
@@ -529,3 +544,11 @@ def test_a_timed_out_tool_is_not_asked_to_verify(
         [Action.FIX],
     )
     assert_that(tool.checked_paths).is_none()
+    # And the fold leaves the timed-out result alone rather than clearing it:
+    # an unverified tool fails, it does not report zero.
+    folded = artifact.tool_results[0]
+    assert_that(folded.timed_out).is_true()
+    assert_that(folded.success).is_false()
+    assert_that(folded.remaining_issues_count).is_equal_to(1)
+    assert_that(artifact.total_remaining).is_equal_to(1)
+    assert_that(artifact.exit_code).is_equal_to(1)
