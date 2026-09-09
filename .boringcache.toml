@@ -1,1 +1,8 @@
 workspace = "boringcache/py-lintro"
+
+[entries.nuitka]
+tag = "validation-series"
+path = ".nuitka-cache"
+
+[profiles.nuitka]
+entries = ["nuitka"]

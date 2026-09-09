@@ -1,0 +1,212 @@
+name: BoringCache validation
+'on':
+  workflow_dispatch:
+    inputs:
+      cli_version:
+        description: Optional exact BoringCache CLI release or prerelease tag
+        type: string
+        default: ''
+      series:
+        description: Cache series shared by the seed, warm and rolling builds
+        type: string
+        default: september-2026
+permissions:
+  contents: read
+concurrency:
+  group: boringcache-validation
+  cancel-in-progress: false
+jobs:
+  cold:
+    name: ${{ matrix.provider }} ${{ matrix.case }} cold
+    if: github.repository_owner == 'boringcache' && github.ref == 'refs/heads/boringcache-validation'
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        provider:
+        - GitHub
+        - BoringCache
+        case:
+        - nuitka
+    env:
+      VALIDATION_SERIES: ${{ inputs.series || 'september-2026' }}
+      VALIDATION_PROVIDER: ${{ matrix.provider }}
+      VALIDATION_CASE: ${{ matrix.case }}
+      VALIDATION_PHASE: cold
+      NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
+      PYTHONUNBUFFERED: '1'
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Record and verify the upstream source
+      run: |
+        mkdir -p "$RUNNER_TEMP/validation"
+        source_commit=$(cat .github/boringcache-source)
+        git diff --exit-code "$source_commit" -- . ':!.github/boringcache*' ':!.github/workflows/boringcache*' ':!.boringcache.toml'
+        git rev-parse HEAD > "$RUNNER_TEMP/validation/workflow-commit.txt"
+        printf '%s\n' "$source_commit" > "$RUNNER_TEMP/validation/source-commit.txt"
+        uname -a > "$RUNNER_TEMP/validation/runner.txt"
+        df -h >> "$RUNNER_TEMP/validation/runner.txt"
+        test "$VALIDATION_SERIES" != ''
+        [[ "$VALIDATION_SERIES" =~ ^[a-zA-Z0-9-]+$ ]]
+        python3 - <<'PY'
+        import os, pathlib
+        p = pathlib.Path('.boringcache.toml')
+        p.write_text(p.read_text().replace('validation-series', os.environ['VALIDATION_SERIES'] + '-' + os.environ['VALIDATION_CASE']))
+        PY
+        cp .boringcache.toml "$RUNNER_TEMP/validation/cache-plan.toml"
+      shell: bash
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.7
+    - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      with:
+        version: 0.12.11
+        enable-cache: false
+    - name: Install the locked binary build dependencies
+      run: |
+        uv sync --locked --group build --no-default-groups
+        python3 --version
+        uv --version
+        xcodebuild -version
+    - name: Restore GitHub Nuitka cache
+      id: github-cache
+      if: matrix.provider == 'GitHub'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: .nuitka-cache
+        key: ${{ env.VALIDATION_SERIES }}-nuitka-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ env.VALIDATION_SERIES }}-nuitka-
+    - name: Configure BoringCache
+      id: cache
+      if: matrix.provider == 'BoringCache'
+      uses: boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7 # v1.30.1
+      with:
+        cli-version: ${{ inputs.cli_version }}
+        mode: archive
+        trust-policy: publish
+        fail-on-cache-error: true
+        fail-on-cache-miss: false
+        cache-profiles: nuitka
+    - name: Run the upstream workload
+      run: bash .github/boringcache-build.sh 2>&1 | tee "$RUNNER_TEMP/validation/workload.log"
+      shell: bash
+    - name: Save GitHub Nuitka cache
+      if: matrix.provider == 'GitHub'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: .nuitka-cache
+        key: ${{ env.VALIDATION_SERIES }}-nuitka-${{ github.run_id }}-${{ github.run_attempt }}
+    - name: Retain measurements and product evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.provider }}-${{ matrix.case }}-cold
+        path: |
+          ${{ runner.temp }}/validation
+          ${{ steps.cache.outputs.evidence-path }}
+        if-no-files-found: error
+        retention-days: 30
+  warm:
+    name: ${{ matrix.provider }} ${{ matrix.case }} warm
+    if: github.repository_owner == 'boringcache' && github.ref == 'refs/heads/boringcache-validation'
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        provider:
+        - GitHub
+        - BoringCache
+        case:
+        - nuitka
+    env:
+      VALIDATION_SERIES: ${{ inputs.series || 'september-2026' }}
+      VALIDATION_PROVIDER: ${{ matrix.provider }}
+      VALIDATION_CASE: ${{ matrix.case }}
+      VALIDATION_PHASE: warm
+      NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
+      PYTHONUNBUFFERED: '1'
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Record and verify the upstream source
+      run: |
+        mkdir -p "$RUNNER_TEMP/validation"
+        source_commit=$(cat .github/boringcache-source)
+        git diff --exit-code "$source_commit" -- . ':!.github/boringcache*' ':!.github/workflows/boringcache*' ':!.boringcache.toml'
+        git rev-parse HEAD > "$RUNNER_TEMP/validation/workflow-commit.txt"
+        printf '%s\n' "$source_commit" > "$RUNNER_TEMP/validation/source-commit.txt"
+        uname -a > "$RUNNER_TEMP/validation/runner.txt"
+        df -h >> "$RUNNER_TEMP/validation/runner.txt"
+        test "$VALIDATION_SERIES" != ''
+        [[ "$VALIDATION_SERIES" =~ ^[a-zA-Z0-9-]+$ ]]
+        python3 - <<'PY'
+        import os, pathlib
+        p = pathlib.Path('.boringcache.toml')
+        p.write_text(p.read_text().replace('validation-series', os.environ['VALIDATION_SERIES'] + '-' + os.environ['VALIDATION_CASE']))
+        PY
+        cp .boringcache.toml "$RUNNER_TEMP/validation/cache-plan.toml"
+      shell: bash
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: 3.14.7
+    - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      with:
+        version: 0.12.11
+        enable-cache: false
+    - name: Install the locked binary build dependencies
+      run: |
+        uv sync --locked --group build --no-default-groups
+        python3 --version
+        uv --version
+        xcodebuild -version
+    - name: Restore GitHub Nuitka cache
+      id: github-cache
+      if: matrix.provider == 'GitHub'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: .nuitka-cache
+        key: ${{ env.VALIDATION_SERIES }}-nuitka-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ env.VALIDATION_SERIES }}-nuitka-
+    - name: Require the seeded GitHub cache
+      if: matrix.provider == 'GitHub' && steps.github-cache.outputs.cache-matched-key == ''
+      run: echo 'The warm sample requires the seeded cache.' >&2; exit 1
+    - name: Configure BoringCache
+      id: cache
+      if: matrix.provider == 'BoringCache'
+      uses: boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7 # v1.30.1
+      with:
+        cli-version: ${{ inputs.cli_version }}
+        mode: archive
+        trust-policy: restore
+        fail-on-cache-error: true
+        fail-on-cache-miss: true
+        cache-profiles: nuitka
+    - name: Run the upstream workload
+      run: bash .github/boringcache-build.sh 2>&1 | tee "$RUNNER_TEMP/validation/workload.log"
+      shell: bash
+    - name: Retain measurements and product evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.provider }}-${{ matrix.case }}-warm
+        path: |
+          ${{ runner.temp }}/validation
+          ${{ steps.cache.outputs.evidence-path }}
+        if-no-files-found: error
+        retention-days: 30
+    needs: cold
