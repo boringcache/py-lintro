@@ -231,6 +231,10 @@ def test_verification_after_a_successful_fix_scores_the_survivors(
     assert_that(result.initial_issues_count).is_equal_to(1)
     assert_that(result.fixed_issues_count).is_equal_to(1)
     assert_that(result.remaining_issues_count).is_equal_to(0)
+    # The stamped directory is the project root the per-file paths were
+    # resolved from; the run-level verify pass anchors relative issue paths
+    # there (#1743), so dropping the stamp must fail a test.
+    assert_that(result.cwd).is_equal_to(str(tmp_path))
 
 
 def test_a_failed_fix_command_reports_every_initial_issue_as_remaining(

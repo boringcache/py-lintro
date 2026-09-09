@@ -13,9 +13,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **plugins**: `DEFAULT_EXCLUDE_PATTERNS` moved to `lintro.utils.path_filtering` and is
+  now a `tuple[str, ...]` instead of a `list[str]`. It is still re-exported from
+  `lintro.plugins.base` and `lintro.plugins.file_discovery`, so imports keep working,
+  but out-of-tree callers that mutated it (`DEFAULT_EXCLUDE_PATTERNS.append(...)`) or
+  concatenated a list to it (`DEFAULT_EXCLUDE_PATTERNS + [...]`) must copy it first:
+  `list(DEFAULT_EXCLUDE_PATTERNS) + [...]`.
+
 ### Deprecated
 
 ### Removed
+
+- **plugins**: `VerifyMode.ALWAYS` (`lintro.tools.core.fix_runner`). Since the run-level
+  verify pass measures the residual once after every mutating tool has run, a per-file
+  re-lint after a _failed_ fix could only report an earlier, less accurate number.
+  Out-of-tree plugins using it should declare `VerifyMode.AFTER_SUCCESS`.
 
 ### Fixed
 

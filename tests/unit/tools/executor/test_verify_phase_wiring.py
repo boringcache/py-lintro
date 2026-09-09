@@ -19,9 +19,11 @@ from assertpy import assert_that
 
 import lintro.utils.tool_executor as te
 from lintro.config.config_loader import get_config
+from lintro.config.lintro_config import LintroConfig
 from lintro.enums.action import Action
 from lintro.enums.capability import Cap
 from lintro.models.core.claim import Claim
+from lintro.models.core.run_artifact import RunArtifact
 from lintro.models.core.tool_result import ToolResult
 from lintro.parsers.ruff.ruff_issue import RuffIssue
 from lintro.tools import tool_manager
@@ -30,6 +32,7 @@ from lintro.utils.execution.run_context import RunContext
 from lintro.utils.execution.tool_configuration import ToolsToRunResult
 from lintro.utils.file_cache import FingerprintSnapshot
 from lintro.utils.tool_executor import execute_run
+from tests.unit.conftest import FakeLogger
 
 
 class _FakeDefinition:
@@ -82,7 +85,7 @@ class _MutatingTool:
         """
         return self
 
-    def fix(self, _paths: Any, _options: Any) -> ToolResult:
+    def fix(self, _paths: list[str], _options: dict[str, Any]) -> ToolResult:
         """Rewrite the target and claim every issue was fixed.
 
         Args:
@@ -129,7 +132,7 @@ class _MutatingTool:
             remaining_issues_count=0,
         )
 
-    def check(self, paths: Any, _options: Any) -> ToolResult:
+    def check(self, paths: list[str], _options: dict[str, Any]) -> ToolResult:
         """Report the residual the verify pass is supposed to surface.
 
         Args:
@@ -158,21 +161,33 @@ class _MutatingTool:
 
 
 class _FakeOutputManager:
-    """Output manager double that writes nothing."""
+    """Output manager double that writes nothing.
+
+    ``base_dir`` is present because ``resolve_log_root`` reads it: without it
+    the severity baseline is skipped for a reason no test states, and
+    ``previous_severity_counts`` is ``None`` by accident rather than because
+    the tmp log root holds no baseline file.
+    """
 
     def __init__(self, run_dir: Path) -> None:
-        """Record the run directory this double reports.
+        """Record the directories this double reports.
 
         Args:
             run_dir: Directory the run pretends to log into.
         """
         self.run_dir = run_dir
+        self.base_dir = run_dir
 
-    def write_reports_from_results(self, results: list[ToolResult]) -> None:
+    def write_reports_from_results(
+        self,
+        results: list[ToolResult],
+        console_text: str | None = None,
+    ) -> None:
         """Ignore report writing.
 
         Args:
             results: Ignored results.
+            console_text: Ignored captured console output.
         """
         return None
 
@@ -225,7 +240,27 @@ def _seed(path: Path) -> Path:
     return path
 
 
-def _fix_context(*, tmp_path: Path, fake_logger: Any) -> RunContext:
+def _pinned_config(*, max_fix_retries: int = 1) -> LintroConfig:
+    """Return the run config with the convergence budget pinned.
+
+    ``run_fix_with_retry`` re-invokes ``fix`` while the result reports a
+    non-zero remaining count, so the ambient ``execution.max_fix_retries``
+    (this repo's config, plus any user-global file) would otherwise decide how
+    many times these doubles rewrite their target. Pinning it makes the
+    invocation count a test input.
+
+    Args:
+        max_fix_retries: Convergence budget to pin.
+
+    Returns:
+        LintroConfig: A copy of the ambient config with the budget pinned.
+    """
+    config = get_config().model_copy(deep=True)
+    config.execution.max_fix_retries = max_fix_retries
+    return config
+
+
+def _fix_context(*, tmp_path: Path, fake_logger: FakeLogger) -> RunContext:
     """Build a fix-mode run context pointed at a temporary run directory.
 
     Args:
@@ -241,7 +276,7 @@ def _fix_context(*, tmp_path: Path, fake_logger: Any) -> RunContext:
         dry_run_preview=False,
         output_manager=_FakeOutputManager(tmp_path),
         logger=fake_logger,
-        lintro_config=get_config(),
+        lintro_config=_pinned_config(),
         clean_stdout_output=True,
         group_by="file",
         profile=False,
@@ -253,7 +288,7 @@ def _run_fmt(
     ctx: RunContext,
     workspace: Path,
     incremental: bool = False,
-) -> Any:
+) -> RunArtifact:
     """Execute a ``fmt`` run over one workspace directory.
 
     Args:
@@ -282,7 +317,7 @@ def test_the_verify_pass_residual_beats_the_fixing_tools_own_zero(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """A tool that rewrote a file does not get to declare the run clean.
 
@@ -323,7 +358,7 @@ def test_a_clean_verify_pass_leaves_the_run_green(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """When the pass finds nothing, the fix stands and the run exits 0.
 
@@ -347,13 +382,17 @@ def test_a_clean_verify_pass_leaves_the_run_green(
     assert_that(artifact.total_remaining).is_equal_to(0)
     assert_that(artifact.total_fixed).is_equal_to(1)
     assert_that(artifact.exit_code).is_equal_to(0)
+    # The double's ``base_dir`` is a real (empty) log root, so the severity
+    # baseline is genuinely consulted and genuinely finds nothing — an
+    # asserted outcome rather than a silently skipped code path.
+    assert_that(artifact.previous_severity_counts).is_none()
 
 
 def test_check_runs_no_verify_pass_and_takes_no_snapshot(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """``chk`` stays read-only: one check invocation, no fix, no second pass.
 
@@ -374,7 +413,7 @@ def test_check_runs_no_verify_pass_and_takes_no_snapshot(
         dry_run_preview=False,
         output_manager=_FakeOutputManager(tmp_path),
         logger=fake_logger,
-        lintro_config=get_config(),
+        lintro_config=_pinned_config(),
         clean_stdout_output=True,
         group_by="file",
         profile=False,
@@ -406,7 +445,7 @@ def test_the_floor_of_an_incremental_run_stays_inside_that_runs_scope(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """A coarse-mtime fallback must not widen an ``--incremental`` run.
 
@@ -459,7 +498,7 @@ def test_a_dry_run_preview_stays_read_only(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """``format --dry-run`` is the one context where the two actions differ.
 
@@ -492,7 +531,7 @@ def test_a_dry_run_preview_stays_read_only(
         dry_run_preview=True,
         output_manager=_FakeOutputManager(tmp_path),
         logger=fake_logger,
-        lintro_config=get_config(),
+        lintro_config=_pinned_config(),
         clean_stdout_output=True,
         group_by="file",
         profile=False,
@@ -512,7 +551,7 @@ def test_a_timed_out_tool_is_not_asked_to_verify(
     monkeypatch: pytest.MonkeyPatch,
     _executor_doubles: list[dict[str, Any]],
     tmp_path: Path,
-    fake_logger: Any,
+    fake_logger: FakeLogger,
 ) -> None:
     """A tool whose fix burned its deadline gets no verify invocation.
 
@@ -544,11 +583,23 @@ def test_a_timed_out_tool_is_not_asked_to_verify(
         [Action.FIX],
     )
     assert_that(tool.checked_paths).is_none()
+    # One mutation invocation: the convergence budget is pinned at 1, so the
+    # timeout path spends exactly one ``fix`` call and the rewrite below is
+    # the only one that happened.
+    assert_that(tool.fix_calls).is_equal_to(1)
     # And the fold leaves the timed-out result alone rather than clearing it:
-    # an unverified tool fails, it does not report zero.
+    # an unverified tool fails, it does not report zero. Asserting the carried
+    # *content* rather than the count matters — the count was written by the
+    # fixture, but a fold that rebuilt or cleared the result could not keep
+    # the pre-fix ``F401`` alongside ``fixed=0``.
     folded = artifact.tool_results[0]
     assert_that(folded.timed_out).is_true()
     assert_that(folded.success).is_false()
     assert_that(folded.remaining_issues_count).is_equal_to(1)
+    assert_that(folded.initial_issues_count).is_equal_to(1)
+    assert_that(folded.fixed_issues_count).is_equal_to(0)
+    assert_that(
+        [getattr(issue, "code", None) for issue in folded.issues or []],
+    ).is_equal_to(["F401"])
     assert_that(artifact.total_remaining).is_equal_to(1)
     assert_that(artifact.exit_code).is_equal_to(1)

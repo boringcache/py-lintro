@@ -495,8 +495,12 @@ def run_per_file_fix(
         remaining_issues_count=remaining_count,
         initial_issues=tally.initial_issues or None,
         timed_out=result.timed_out,
-        # The run-level verify pass resolves each issue's file against this
-        # directory to decide whether the file was rewritten (#1743), so a
-        # relative ``issue.file`` must carry the directory it is relative to.
+        # The project root the per-file paths were resolved from — not the
+        # subprocess working directory, which this runner never sets. The
+        # run-level verify pass anchors a relative ``issue.file`` here when it
+        # decides whether the file was rewritten (#1743); today every
+        # ``ctx.files`` entry is absolute, so tools echo absolute paths and
+        # the anchor is unused, and an unresolved path keeps the pre-fix
+        # finding rather than clearing it.
         cwd=ctx.cwd,
     )
