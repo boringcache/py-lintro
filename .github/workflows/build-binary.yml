@@ -155,10 +155,15 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
-      # #2435: the reuse check lists and downloads this run's own sha256
-      # artifact (including earlier attempts) to decide whether the asset on
-      # the release is one this job already verified.
-      actions: read
+      # NOTE: actions: read is deliberately NOT granted here. In the tag
+      # pipeline the top-level caller (publish-pypi-on-tag.yml) grants
+      # permissions: {}, and GitHub rejects a called reusable workflow whose
+      # jobs request a scope the caller does not grant — the whole
+      # Publish - PyPI Production run fails as startup_failure (v0.152.1+).
+      # Without the scope the #2435 reuse check fails open to a rebuild
+      # (reuse_release_asset.sh treats undecidable as rebuild). Restoring the
+      # reuse optimization requires granting actions: read at the top-level
+      # caller instead.
     strategy:
       fail-fast: false
       matrix:
@@ -379,10 +384,15 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
-      # #2435: the reuse check lists and downloads this run's own sha256
-      # artifact (including earlier attempts) to decide whether the asset on
-      # the release is one this job already verified.
-      actions: read
+      # NOTE: actions: read is deliberately NOT granted here. In the tag
+      # pipeline the top-level caller (publish-pypi-on-tag.yml) grants
+      # permissions: {}, and GitHub rejects a called reusable workflow whose
+      # jobs request a scope the caller does not grant — the whole
+      # Publish - PyPI Production run fails as startup_failure (v0.152.1+).
+      # Without the scope the #2435 reuse check fails open to a rebuild
+      # (reuse_release_asset.sh treats undecidable as rebuild). Restoring the
+      # reuse optimization requires granting actions: read at the top-level
+      # caller instead.
     strategy:
       fail-fast: false
       matrix:
