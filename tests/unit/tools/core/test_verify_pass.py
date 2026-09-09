@@ -8,6 +8,8 @@ degrading to the documented floor when fingerprints cannot be trusted.
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -25,6 +27,7 @@ from lintro.tools.core import verify_pass
 from lintro.tools.core.verify_pass import (
     COARSE_MTIME_REASON,
     UNREADABLE_REASON,
+    VERIFY_NOTE_TEMPLATE,
     VerifyBaseline,
     VerifyOutcome,
     VerifyScope,
@@ -252,6 +255,11 @@ def test_resolve_verify_scope_narrows_to_files_whose_fingerprint_moved(
     untouched = tmp_path / "untouched.py"
     touched.write_text("x = 1\n", encoding="utf-8")
     untouched.write_text("y = 2\n", encoding="utf-8")
+    # The untouched file's fingerprint has to *match* its re-stat, so its mtime
+    # is stamped rather than read: reading it back would put a host-supplied
+    # (possibly whole-second) value into the snapshot and send the test down
+    # the floor path on exactly the filesystems the docstring is about.
+    os.utime(untouched, (1_700_000_001.25, 1_700_000_001.25))
     candidates = (str(touched), str(untouched))
     baseline = VerifyBaseline(
         candidates=candidates,
@@ -263,10 +271,10 @@ def test_resolve_verify_scope_narrows_to_files_whose_fingerprint_moved(
                     mtime=1_700_000_000.25,
                     size=touched.stat().st_size,
                 ),
-                # ...and the file's real state for the one that is not.
+                # ...and the stamped value for the one that is not.
                 str(untouched): FileFingerprint(
                     path=str(untouched),
-                    mtime=untouched.stat().st_mtime,
+                    mtime=1_700_000_001.25,
                     size=untouched.stat().st_size,
                 ),
             },
@@ -416,7 +424,9 @@ def test_fold_replaces_the_tools_own_residual_without_double_counting() -> None:
     assert_that(folded.remaining_issues_count).is_equal_to(1)
     assert_that(folded.issues_count).is_equal_to(1)
     assert_that(folded.fixed_issues_count).is_equal_to(9)
-    assert_that(folded.output).contains("Verify pass: 1 issue(s) remain")
+    assert_that(folded.output).contains(
+        VERIFY_NOTE_TEMPLATE.format(residual=1, previous=2),
+    )
 
 
 def test_fold_keeps_a_failed_mutation_failed_even_with_no_residual() -> None:
@@ -1251,3 +1261,177 @@ def test_a_verify_result_without_a_cwd_falls_back_to_the_mutations(
 
     # One finding, not two: the pre-fix one is superseded, not added to.
     assert_that(results[0].remaining_issues_count).is_equal_to(1)
+
+
+def test_run_verify_pass_reports_a_skipped_check_as_unverified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A version gate that skips the CHECK is not a clean verdict.
+
+    ``verify_tool_version`` returns ``success=True, issues_count=0,
+    skipped=True`` when a tool is too old, which is byte-for-byte the shape of
+    "nothing wrong here". Reading it as a verdict would mark every file in the
+    scope verified and drop the tool's pre-fix findings.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    ruff = _FakeTool(
+        definition=_FakeDefinition(
+            claims=[Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})],
+        ),
+        result=ToolResult(
+            name="ruff",
+            success=True,
+            issues_count=0,
+            skipped=True,
+            skip_reason="ruff 0.1.0 is older than the required 0.5.0",
+        ),
+    )
+    _register(monkeypatch, {"ruff": ruff})
+
+    outcomes = run_verify_pass(
+        tools_to_run=["ruff"],
+        scope=VerifyScope(files=("/a.py",), narrowed=True),
+        configure=lambda *, tool_name: cast("VerifiableTool", ruff),
+    )
+
+    assert_that([o.tool for o in outcomes]).is_equal_to(["ruff"])
+    assert_that(outcomes[0].ran).is_false()
+    assert_that(outcomes[0].result).is_none()
+
+
+def test_run_verify_pass_treats_a_no_files_check_as_verifying_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tool that discovered none of the scope's files verified none of them.
+
+    The scope is the union over every mutating tool, so a tool that rewrote
+    nothing is routinely handed another tool's files and returns
+    ``prepare``'s "No files to check." early result. That is not a failure —
+    the tool rewrote nothing, so its pre-fix findings simply stand — but it is
+    not a clean verdict over the scope either.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+    """
+    ruff = _FakeTool(
+        definition=_FakeDefinition(
+            claims=[Claim(patterns=["*.py"], capabilities={Cap.FIX, Cap.CHECK})],
+        ),
+        result=ToolResult(
+            name="ruff",
+            success=True,
+            output="No .py files found to check.",
+            issues_count=0,
+            no_files=True,
+        ),
+    )
+    _register(monkeypatch, {"ruff": ruff})
+
+    outcomes = run_verify_pass(
+        tools_to_run=["ruff"],
+        scope=VerifyScope(files=("/a.css",), narrowed=True),
+        configure=lambda *, tool_name: cast("VerifiableTool", ruff),
+    )
+
+    assert_that(outcomes[0].ran).is_true()
+    assert_that(outcomes[0].result).is_none()
+
+
+def test_fold_never_reads_a_skipped_check_as_a_clean_verdict() -> None:
+    """A skipped CHECK verifies nothing, so the pre-fix findings survive.
+
+    Belt and braces for the fail-open ``run_verify_pass`` already closes: a
+    hand-built outcome carrying a skipped result must not clear the scope
+    either.
+    """
+    mutation = ToolResult(
+        name="ruff",
+        success=True,
+        output="Fixed 1 issue(s)",
+        issues_count=0,
+        issues=[],
+        initial_issues=[_issue("/repo/a.py"), _issue("/repo/a.py")],
+        initial_issues_count=2,
+        fixed_issues_count=2,
+        remaining_issues_count=0,
+        capability=Cap.FIX,
+    )
+    verify = ToolResult(
+        name="ruff",
+        success=True,
+        issues_count=0,
+        issues=[],
+        skipped=True,
+        skip_reason="ruff is older than the required version",
+    )
+    results = [mutation]
+
+    fold_verify_results(
+        mutation_results=results,
+        verify_results=[VerifyOutcome(tool="ruff", result=verify)],
+        scope=VerifyScope(files=("/repo/a.py",), narrowed=True),
+    )
+
+    folded = results[0]
+    assert_that(folded.remaining_issues_count).is_equal_to(2)
+    assert_that(folded.fixed_issues_count).is_equal_to(0)
+    assert_that(folded.success).is_false()
+
+
+def test_the_verify_baseline_reads_the_incremental_cache_without_writing_it(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``_incremental_subset`` must never persist the cache it consults.
+
+    It runs *before* the mutation phase, so writing the cache would record
+    every candidate as up to date and tell the next incremental run there was
+    nothing to format. The property is "this reads and does not write", which
+    only an unstubbed call over a real cache directory can pin.
+
+    Args:
+        monkeypatch: pytest monkeypatch fixture.
+        tmp_path: Temporary directory standing in for the cache root.
+    """
+    from lintro.utils import file_cache
+
+    unchanged = tmp_path / "unchanged.py"
+    changed = tmp_path / "changed.py"
+    unchanged.write_text("x = 1\n", encoding="utf-8")
+    changed.write_text("y = 2\n", encoding="utf-8")
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    cache_file = cache_dir / "black.json"
+    stat = unchanged.stat()
+    cache_file.write_text(
+        json.dumps(
+            {
+                "tool_name": "black",
+                "fingerprints": {
+                    str(unchanged): {
+                        "path": str(unchanged),
+                        "mtime": stat.st_mtime,
+                        "size": stat.st_size,
+                    },
+                },
+            },
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(file_cache, "CACHE_DIR", cache_dir)
+    before = cache_file.read_text(encoding="utf-8")
+
+    subset = verify_pass._incremental_subset(
+        tool_name="black",
+        files=[str(unchanged), str(changed)],
+    )
+
+    assert_that(subset).is_equal_to([str(changed)])
+    # No new cache file, and the seeded one is byte-identical: a switch to
+    # ``walk_files_with_excludes(incremental=True)`` would fail here.
+    assert_that(sorted(p.name for p in cache_dir.iterdir())).is_equal_to(
+        ["black.json"],
+    )
+    assert_that(cache_file.read_text(encoding="utf-8")).is_equal_to(before)

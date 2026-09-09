@@ -86,6 +86,7 @@ __all__ = [
     "UnresolvableToolError",
     "NARROWED_REASON",
     "UNREADABLE_REASON",
+    "VERIFY_NOTE_TEMPLATE",
     "VerifiableTool",
     "VerifyBaseline",
     "VerifyOutcome",
@@ -106,6 +107,14 @@ COARSE_MTIME_REASON: str = "coarse mtime resolution"
 
 #: Floor reason: at least one candidate file could not be stat'ed.
 UNREADABLE_REASON: str = "some files could not be fingerprinted"
+
+#: Note appended to a tool's output when the verify pass and the fix pass
+#: disagree about the residual. Lifted out of ``_fold_one`` so the tests and
+#: ``docs/configuration.md`` pin the same string the run emits.
+VERIFY_NOTE_TEMPLATE: str = (
+    "Verify pass: {residual} issue(s) remain after all mutating tools ran "
+    "(the fix pass reported {previous})."
+)
 
 
 class UnresolvableToolError(LookupError):
@@ -284,10 +293,13 @@ class VerifyOutcome:
         tool: The verifying tool's registry name.
         result: Its ``CHECK`` result, or ``None`` when no check was run —
             either because nothing was rewritten or because the check raised.
-        ran: False only when the check raised. A ``None`` result with
-            ``ran=True`` means nothing was rewritten, so ``CHECK`` was skipped
-            and the fold keeps the mutation phase's pre-fix findings (which
-            may still fail the run); ``ran=False`` means "we could not tell",
+        ran: False when the check raised, when the registry could not
+            resolve the tool at all, or when the check returned without
+            executing (a version gate skipped it). A ``None`` result with
+            ``ran=True`` means nothing needed re-checking — nothing was
+            rewritten, or the tool discovered none of the scope's files — so
+            the fold keeps the mutation phase's pre-fix findings (which may
+            still fail the run); ``ran=False`` means "we could not tell",
             which fails.
     """
 
@@ -418,7 +430,9 @@ def capture_verify_baseline(
     Returns:
         VerifyBaseline: The floor file set and its pre-mutation fingerprints.
         Empty when no selected tool declares a pattern-addressed mutating
-        claim, which makes the verify pass a no-op.
+        claim. An empty baseline is not a no-op: ``run_verify_pass`` still
+        emits an outcome per verifying tool, and the fold then carries every
+        pre-fix finding and fails the run, because nothing was verified.
     """
     patterns_by_tool = _mutating_patterns_by_tool(tools_to_run)
     if not patterns_by_tool:
@@ -583,6 +597,21 @@ def run_verify_pass(
             logger.opt(exception=True).debug(f"Verify pass failed for {name}")
             outcomes.append(VerifyOutcome(tool=name, result=None, ran=False))
             continue
+        if result.skipped:
+            # The check returned without executing — a version gate, most
+            # often. ``success=True, issues_count=0`` is the shape of a clean
+            # verdict, but no file was examined, so trusting it would drop the
+            # tool's pre-fix findings as "fixed". Report it as unverified.
+            outcomes.append(VerifyOutcome(tool=name, result=None, ran=False))
+            continue
+        if result.no_files:
+            # The tool's own discovery matched none of the scope's files, so
+            # it verified nothing. Unlike a skip this is routine — the scope is
+            # the union over every mutating tool, so a tool that rewrote
+            # nothing is handed another tool's files — and it means this tool
+            # rewrote nothing either. Its pre-fix findings simply stand.
+            outcomes.append(VerifyOutcome(tool=name, result=None, ran=True))
+            continue
         result.capability = Cap.CHECK
         result.duration_seconds = time.monotonic() - started
         outcomes.append(VerifyOutcome(tool=name, result=result, ran=True))
@@ -659,8 +688,16 @@ def _fold_one(
     # is carried and the run reports a failure rather than a silent zero. The
     # same holds for a CHECK that ran but produced no verdict: a timeout or an
     # execution error comes back as ``success=False`` with no parsed issues,
-    # and treating that as "clean" would drop the pre-fix findings.
-    check_answered = verify is not None and (verify.success or bool(verify.issues))
+    # and treating that as "clean" would drop the pre-fix findings. A skipped
+    # or no-files result is the same fail-open wearing ``success=True``:
+    # ``run_verify_pass`` already converts both to ``result=None``, and the
+    # guard below keeps a hand-built outcome from re-opening the hole.
+    check_answered = (
+        verify is not None
+        and not verify.skipped
+        and not verify.no_files
+        and (verify.success or bool(verify.issues))
+    )
     verified_paths = _verified_paths(
         scope=scope,
         verify=verify if check_answered else None,
@@ -685,10 +722,7 @@ def _fold_one(
         previous = mutation.issues_count
     output = mutation.output or ""
     if previous != residual:
-        note = (
-            f"Verify pass: {residual} issue(s) remain after all mutating tools "
-            f"ran (the fix pass reported {previous})."
-        )
+        note = VERIFY_NOTE_TEMPLATE.format(residual=residual, previous=previous)
         output = f"{output}\n{note}" if output.strip() else note
 
     mutation.issues = survivors

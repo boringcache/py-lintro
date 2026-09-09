@@ -74,6 +74,14 @@ class ToolResult:
     # issue file paths in AI fix generation)
     cwd: str | None = field(default=None)
 
+    # True when the tool returned early because file discovery matched
+    # nothing. Deliberately distinct from ``skipped`` (which forces
+    # ``success=True`` and hides the tool from reporting): a no-files result is
+    # a successful non-event, but it is not a verdict about any file, so the
+    # run-level verify pass (#1743) must not read it as "these files are
+    # clean".
+    no_files: bool = field(default=False)
+
     # Skip tracking for tools that didn't execute
     skipped: bool = field(default=False)
     skip_reason: str | None = field(default=None)

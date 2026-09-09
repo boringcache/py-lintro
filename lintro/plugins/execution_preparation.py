@@ -264,6 +264,7 @@ def prepare_execution(
                 success=True,
                 output=no_files_message,
                 issues_count=0,
+                no_files=True,
             ),
         }
 
@@ -293,6 +294,7 @@ def prepare_execution(
                 success=True,
                 output=f"No {file_type} found to check.",
                 issues_count=0,
+                no_files=True,
             ),
         }
 
