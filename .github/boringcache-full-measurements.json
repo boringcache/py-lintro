@@ -1,0 +1,578 @@
+{
+  "schema_version": 1,
+  "scope": "Full integration validation for boringcache/py-lintro, separate from the historical compiler/archive cohort.",
+  "timing": "Whole-job timestamps exclude queue time; One elapsed includes its cache operations and wrapped command. Never combine these boundaries.",
+  "runs": [
+    {
+      "repository": "boringcache/py-lintro",
+      "databaseId": 34362764988,
+      "headSha": "7adb76e78af95704d5dce7a87cc79bc6b53cfce5",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/boringcache/py-lintro/actions/runs/34362764988",
+      "jobs": [
+        {
+          "databaseId": 102503688729,
+          "name": "BoringCache tools image cold",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/boringcache/py-lintro/actions/runs/34362764988/job/102503688729",
+          "whole_job_seconds": 504.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 5.0
+            },
+            {
+              "name": "Record source identity",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Build tools with Docker layer, mount and compiler caches",
+              "conclusion": "success",
+              "seconds": 492.0
+            },
+            {
+              "name": "Verify loaded tools image",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Retain Docker evidence",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Build tools with Docker layer, mount and compiler caches",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "seconds": 0.0
+            }
+          ],
+          "cached_buildkit_vertices": 0,
+          "native_log_observations": [
+            "2026-09-09T14:19:04.4244304Z #13 boringcache cache mount hydrate cacheID=\"//var/cache/apt\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:19:04.7993699Z #13 boringcache cache mount hydrate cacheID=\"//var/lib/apt\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:19:23.8227949Z #15 boringcache cache mount hydrate cacheID=\"//root/.cache/bun\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:19:31.2916166Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/git\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:19:31.6850627Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/registry\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:19:32.1136898Z #26 boringcache cache mount hydrate cacheID=\"//root/.cache/uv\" status=miss_all restoreCount=2 worker=rust done",
+            "2026-09-09T14:22:11.7358152Z #26 160.8     Finished `release` profile [optimized] target(s) in 2m 04s",
+            "2026-09-09T14:24:32.3244494Z #26 301.4     Finished `release` profile [optimized] target(s) in 2m 00s"
+          ]
+        },
+        {
+          "databaseId": 102506844855,
+          "name": "BoringCache tools image warm",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/boringcache/py-lintro/actions/runs/34362764988/job/102506844855",
+          "whole_job_seconds": 102.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 5.0
+            },
+            {
+              "name": "Record source identity",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Build tools with Docker layer, mount and compiler caches",
+              "conclusion": "success",
+              "seconds": 90.0
+            },
+            {
+              "name": "Verify loaded tools image",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Retain Docker evidence",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Build tools with Docker layer, mount and compiler caches",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "seconds": 0.0
+            }
+          ],
+          "cached_buildkit_vertices": 17,
+          "native_log_observations": []
+        }
+      ],
+      "one_evidence": [
+        {
+          "artifact": "docker-tools-cold",
+          "product_refs": {
+            "schema_version": 1,
+            "cli_version": "v1.30.1",
+            "action_ref": "boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7",
+            "action_sha": "404b744a2053da4cf963f13f615f7fafe94f3cf7"
+          },
+          "phases": [
+            {
+              "phase": "restore",
+              "mode": "docker",
+              "cache_result": "not_evaluated",
+              "trust_policy": "publish",
+              "resolved_tags": [
+                "docker-tools-linux-amd64"
+              ],
+              "elapsed_seconds": 489.8,
+              "target_cache_hit": null,
+              "native_tool": null
+            }
+          ]
+        },
+        {
+          "artifact": "docker-tools-warm",
+          "product_refs": {
+            "schema_version": 1,
+            "cli_version": "v1.30.1",
+            "action_ref": "boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7",
+            "action_sha": "404b744a2053da4cf963f13f615f7fafe94f3cf7"
+          },
+          "phases": [
+            {
+              "phase": "restore",
+              "mode": "docker",
+              "cache_result": "not_evaluated",
+              "trust_policy": "restore",
+              "resolved_tags": [
+                "docker-tools-linux-amd64"
+              ],
+              "elapsed_seconds": 88.6,
+              "target_cache_hit": null,
+              "native_tool": null
+            }
+          ]
+        }
+      ],
+      "workspace_diagnostics": []
+    },
+    {
+      "repository": "boringcache/py-lintro",
+      "databaseId": 34364191604,
+      "headSha": "a5fc1683623d42dcf4f889960959f29f2a23e208",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/boringcache/py-lintro/actions/runs/34364191604",
+      "jobs": [
+        {
+          "databaseId": 102508585519,
+          "name": "Rebuild tools using compiler and mount caches",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/boringcache/py-lintro/actions/runs/34364191604/job/102508585519",
+          "whole_job_seconds": 652.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 5.0
+            },
+            {
+              "name": "Record source identity",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 2.0
+            },
+            {
+              "name": "Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 636.0
+            },
+            {
+              "name": "Verify loaded tools image",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Retain Docker evidence",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "seconds": 0.0
+            }
+          ],
+          "cached_buildkit_vertices": 0,
+          "native_log_observations": [
+            "2026-09-09T14:32:20.0304339Z #13 boringcache cache mount hydrate cacheID=\"//var/cache/apt\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:32:20.3354256Z #13 boringcache cache mount hydrate cacheID=\"//var/lib/apt\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:32:41.7755274Z #15 boringcache cache mount hydrate cacheID=\"//root/.cache/bun\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:32:51.8887465Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/git\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:32:52.1789470Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/registry\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:32:52.4607374Z #26 boringcache cache mount hydrate cacheID=\"//root/.cache/uv\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:35:08.5604071Z #26 137.0     Finished `release` profile [optimized] target(s) in 1m 39s",
+            "2026-09-09T14:37:10.3861199Z #26 258.8     Finished `release` profile [optimized] target(s) in 1m 36s",
+            "2026-09-09T14:37:29.0387148Z #26 277.3 Compile requests                    530",
+            "2026-09-09T14:37:29.0387622Z #26 277.3 Compile requests executed           442",
+            "2026-09-09T14:37:29.0387898Z #26 277.3 Cache hits                            0",
+            "2026-09-09T14:37:29.0388130Z #26 277.3 Cache misses                        436",
+            "2026-09-09T14:37:29.0388380Z #26 277.3 Cache misses (Assembler)             28",
+            "2026-09-09T14:37:29.0388630Z #26 277.3 Cache misses (C/C++)                 69",
+            "2026-09-09T14:37:29.0388865Z #26 277.3 Cache misses (Rust)                 339",
+            "2026-09-09T14:37:29.0389472Z #26 277.3 Cache hits rate                    0.00 %",
+            "2026-09-09T14:37:29.0389721Z #26 277.3 Cache hits rate (Assembler)        0.00 %",
+            "2026-09-09T14:37:29.0389957Z #26 277.3 Cache hits rate (C/C++)            0.00 %",
+            "2026-09-09T14:37:29.0390205Z #26 277.3 Cache hits rate (Rust)             0.00 %",
+            "2026-09-09T14:37:29.0390433Z #26 277.3 Cache timeouts                        0",
+            "2026-09-09T14:37:29.0390665Z #26 277.3 Cache read errors                     0",
+            "2026-09-09T14:37:29.0391140Z #26 277.3 Cache write errors                  436",
+            "2026-09-09T14:37:29.0391363Z #26 277.3 Cache errors                          0"
+          ]
+        }
+      ],
+      "one_evidence": [
+        {
+          "artifact": "docker-tools-rebuild",
+          "product_refs": {
+            "schema_version": 1,
+            "cli_version": "v1.30.1",
+            "action_ref": "boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7",
+            "action_sha": "404b744a2053da4cf963f13f615f7fafe94f3cf7"
+          },
+          "phases": [
+            {
+              "phase": "restore",
+              "mode": "docker",
+              "cache_result": "not_evaluated",
+              "trust_policy": "restore",
+              "resolved_tags": [
+                "docker-tools-ubuntu-24-x86_64"
+              ],
+              "elapsed_seconds": 632.9,
+              "target_cache_hit": null,
+              "native_tool": null
+            }
+          ]
+        }
+      ],
+      "workspace_diagnostics": []
+    },
+    {
+      "repository": "boringcache/py-lintro",
+      "databaseId": 34366355087,
+      "headSha": "6d2d01bad040c328f6867ceee3383ba69a636fd9",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/boringcache/py-lintro/actions/runs/34366355087",
+      "jobs": [
+        {
+          "databaseId": 102515973578,
+          "name": "Seed compiler and mount caches with layers bypassed",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/boringcache/py-lintro/actions/runs/34366355087/job/102515973578",
+          "whole_job_seconds": 549.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 5.0
+            },
+            {
+              "name": "Record source identity",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 534.0
+            },
+            {
+              "name": "Verify loaded tools image",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Retain Docker evidence",
+              "conclusion": "success",
+              "seconds": 2.0
+            },
+            {
+              "name": "Post Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "seconds": 0.0
+            }
+          ],
+          "cached_buildkit_vertices": 0,
+          "native_log_observations": [
+            "2026-09-09T14:51:42.9259472Z #13 boringcache cache mount hydrate cacheID=\"//var/cache/apt\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:51:43.2621059Z #13 boringcache cache mount hydrate cacheID=\"//var/lib/apt\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:52:09.7113532Z #15 boringcache cache mount hydrate cacheID=\"//root/.cache/bun\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:52:17.0034409Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/git\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:52:17.3312371Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/registry\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:52:17.7837136Z #26 boringcache cache mount hydrate cacheID=\"//root/.cache/uv\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T14:55:00.4561386Z #26 163.8     Finished `release` profile [optimized] target(s) in 2m 09s",
+            "2026-09-09T14:57:29.3134972Z #26 312.6     Finished `release` profile [optimized] target(s) in 2m 09s",
+            "2026-09-09T14:57:49.8176467Z #26 333.0 Compile requests                     530",
+            "2026-09-09T14:57:49.8177186Z #26 333.0 Compile requests executed            442",
+            "2026-09-09T14:57:49.8177669Z #26 333.0 Cache hits                             0",
+            "2026-09-09T14:57:49.8178264Z #26 333.0 Cache misses                         436",
+            "2026-09-09T14:57:49.8178963Z #26 333.0 Cache misses (Assembler)              28",
+            "2026-09-09T14:57:49.8179559Z #26 333.0 Cache misses (C/C++)                  69",
+            "2026-09-09T14:57:49.8180562Z #26 333.0 Cache misses (Rust)                  339",
+            "2026-09-09T14:57:49.8180972Z #26 333.0 Cache hits rate                     0.00 %",
+            "2026-09-09T14:57:49.8181348Z #26 333.0 Cache hits rate (Assembler)         0.00 %",
+            "2026-09-09T14:57:49.8181708Z #26 333.0 Cache hits rate (C/C++)             0.00 %",
+            "2026-09-09T14:57:49.8182063Z #26 333.0 Cache hits rate (Rust)              0.00 %",
+            "2026-09-09T14:57:49.8182406Z #26 333.0 Cache timeouts                         0",
+            "2026-09-09T14:57:49.8182744Z #26 333.0 Cache read errors                      0",
+            "2026-09-09T14:57:49.8183556Z #26 333.0 Cache write errors                     0",
+            "2026-09-09T14:57:49.8183890Z #26 333.0 Cache errors                           0"
+          ]
+        },
+        {
+          "databaseId": 102519475920,
+          "name": "Rebuild tools using compiler and mount caches",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/boringcache/py-lintro/actions/runs/34366355087/job/102519475920",
+          "whole_job_seconds": 475.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 5.0
+            },
+            {
+              "name": "Record source identity",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 3.0
+            },
+            {
+              "name": "Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 461.0
+            },
+            {
+              "name": "Verify loaded tools image",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Retain Docker evidence",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Rebuild with Docker layers bypassed",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+              "conclusion": "success",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "conclusion": "success",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "seconds": 0.0
+            }
+          ],
+          "cached_buildkit_vertices": 0,
+          "native_log_observations": [
+            "2026-09-09T15:00:58.8221329Z #13 boringcache cache mount hydrate cacheID=\"//var/cache/apt\" status=hit archive=\"docker-tools-ubuntu-24-x86_64-target-tools-buildkit-cachemount-03d5c32254d3564dc73a8e846015fae969c5237364e0577130508cb7d86324fa\" worker=rust total=772ms done",
+            "2026-09-09T15:00:59.7216672Z #13 boringcache cache mount hydrate cacheID=\"//var/lib/apt\" status=hit archive=\"docker-tools-ubuntu-24-x86_64-target-tools-buildkit-cachemount-ee996ff3609207d1a9ad13e40b56b75664d4802c50b38a48a4773c8e4a01795f\" worker=rust total=899ms done",
+            "2026-09-09T15:01:15.9424831Z #15 boringcache cache mount hydrate cacheID=\"//root/.cache/bun\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T15:01:23.5351876Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/git\" status=miss_all restoreCount=1 worker=rust done",
+            "2026-09-09T15:01:28.3904895Z #26 boringcache cache mount hydrate cacheID=\"//opt/cargo/registry\" status=hit archive=\"docker-tools-ubuntu-24-x86_64-target-tools-buildkit-cachemount-a9ce93a4130aacaf4e8eb222b1d38d451dd5ac766f946b52837e5f099915b998\" worker=rust total=4.855s done",
+            "2026-09-09T15:01:33.1012943Z #26 boringcache cache mount hydrate cacheID=\"//root/.cache/uv\" status=hit archive=\"docker-tools-ubuntu-24-x86_64-target-tools-buildkit-cachemount-843ef1cc744cc70b5c6139599a6c3f49c80a4b16780e0bd70ec0e3019e4fa8d6\" worker=rust total=4.711s done",
+            "2026-09-09T15:03:34.1319445Z #26 130.9     Finished `release` profile [optimized] target(s) in 1m 24s",
+            "2026-09-09T15:04:31.9551171Z #26 188.7     Finished `release` profile [optimized] target(s) in 38.90s",
+            "2026-09-09T15:04:52.9132583Z #26 209.6 Compile requests                     530",
+            "2026-09-09T15:04:52.9133429Z #26 209.6 Compile requests executed            442",
+            "2026-09-09T15:04:52.9134172Z #26 209.6 Cache hits                           413",
+            "2026-09-09T15:04:52.9134902Z #26 209.6 Cache hits (Assembler)                28",
+            "2026-09-09T15:04:52.9135675Z #26 209.6 Cache hits (C/C++)                    69",
+            "2026-09-09T15:04:52.9136383Z #26 209.6 Cache hits (Rust)                    316",
+            "2026-09-09T15:04:52.9137097Z #26 209.6 Cache misses                          23",
+            "2026-09-09T15:04:52.9138120Z #26 209.6 Cache misses (Rust)                   23",
+            "2026-09-09T15:04:52.9138849Z #26 209.6 Cache hits rate                    94.72 %",
+            "2026-09-09T15:04:52.9139613Z #26 209.6 Cache hits rate (Assembler)       100.00 %",
+            "2026-09-09T15:04:52.9140339Z #26 209.6 Cache hits rate (C/C++)           100.00 %",
+            "2026-09-09T15:04:52.9140997Z #26 209.6 Cache hits rate (Rust)             93.22 %",
+            "2026-09-09T15:04:52.9141664Z #26 209.6 Cache timeouts                         0",
+            "2026-09-09T15:04:52.9142299Z #26 209.6 Cache read errors                      0",
+            "2026-09-09T15:04:52.9143603Z #26 209.6 Cache write errors                    23",
+            "2026-09-09T15:04:52.9144256Z #26 209.6 Cache errors                           0"
+          ]
+        }
+      ],
+      "one_evidence": [
+        {
+          "artifact": "docker-tools-rebuild",
+          "product_refs": {
+            "schema_version": 1,
+            "cli_version": "v1.30.1",
+            "action_ref": "boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7",
+            "action_sha": "404b744a2053da4cf963f13f615f7fafe94f3cf7"
+          },
+          "phases": [
+            {
+              "phase": "restore",
+              "mode": "docker",
+              "cache_result": "not_evaluated",
+              "trust_policy": "restore",
+              "resolved_tags": [
+                "docker-tools-ubuntu-24-x86_64"
+              ],
+              "elapsed_seconds": 458,
+              "target_cache_hit": null,
+              "native_tool": null
+            }
+          ]
+        },
+        {
+          "artifact": "docker-tools-rebuild-seed",
+          "product_refs": {
+            "schema_version": 1,
+            "cli_version": "v1.30.1",
+            "action_ref": "boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7",
+            "action_sha": "404b744a2053da4cf963f13f615f7fafe94f3cf7"
+          },
+          "phases": [
+            {
+              "phase": "restore",
+              "mode": "docker",
+              "cache_result": "not_evaluated",
+              "trust_policy": "publish",
+              "resolved_tags": [
+                "docker-tools-ubuntu-24-x86_64"
+              ],
+              "elapsed_seconds": 530.6,
+              "target_cache_hit": null,
+              "native_tool": null
+            }
+          ]
+        }
+      ],
+      "workspace_diagnostics": []
+    }
+  ]
+}

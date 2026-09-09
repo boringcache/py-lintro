@@ -51,3 +51,8 @@ The paired jobs use the same source, runner class, toolchain and cache surface. 
 | 4 | nuitka / commit | BoringCache | 450.034 | [job 102487632012](https://github.com/boringcache/py-lintro/actions/runs/34358048705/job/102487632012) |
 | 5 | nuitka / commit | GitHub | 448.830 | [job 102491064878](https://github.com/boringcache/py-lintro/actions/runs/34359061982/job/102491064878) |
 | 5 | nuitka / commit | BoringCache | 380.401 | [job 102491065291](https://github.com/boringcache/py-lintro/actions/runs/34359061982/job/102491065291) |
+
+
+## Full integration follow-up
+
+The [Cargo/Docker integration report](boringcache-full-validation.md) records the subsequent first-class Cargo and relevant Docker validation. The compiler/archive results above remain a separate cohort; use the preserved `compiler-cache-validation` branch to reproduce that configuration.
