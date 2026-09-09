@@ -1,0 +1,72 @@
+{
+  "manifest": {
+    "repo": "py-lintro",
+    "folder": "py-lintro-onboarding",
+    "upstream": "lgtm-hq/py-lintro",
+    "branch": "main",
+    "commits": [
+      "e8773c533caff41403dc40f37eee608c20143f01",
+      "cbe03f587f897109b0fd8bea765118bab176024c",
+      "af2d97bfde1f075f0cb05c88a45068d3fac12c8d",
+      "e8d2293ad2509d5b647077fcaf7fa3609ad9705f",
+      "b0cf8ad21dc72a7ffface2b3a9ce5e7138b7eaf9",
+      "5d5572a22cecd58f2417057299f380b06871b56a"
+    ]
+  },
+  "changes": [
+    {
+      "repo": "py-lintro",
+      "source_index": 1,
+      "source": "cbe03f587f897109b0fd8bea765118bab176024c",
+      "subject": "chore(deps): update rust-lang/rust to 1.98.1 (#2465)",
+      "changed_paths": [
+        "lintro/_tool_versions.py"
+      ]
+    },
+    {
+      "repo": "py-lintro",
+      "source_index": 2,
+      "source": "af2d97bfde1f075f0cb05c88a45068d3fac12c8d",
+      "subject": "chore(deps): renovate bump (#2486)",
+      "changed_paths": [
+        ".github/workflows/build-binary.yml",
+        ".github/workflows/docker-ci.yml",
+        "Dockerfile",
+        "docker/ai-tools.Dockerfile",
+        "docker/tools.Dockerfile"
+      ]
+    },
+    {
+      "repo": "py-lintro",
+      "source_index": 3,
+      "source": "e8d2293ad2509d5b647077fcaf7fa3609ad9705f",
+      "subject": "fix(ci): pin the lintro-tools image built from main's rustc 1.98.1 manifest (#2499)",
+      "changed_paths": [
+        "Dockerfile",
+        "docker/ai-tools.Dockerfile"
+      ]
+    },
+    {
+      "repo": "py-lintro",
+      "source_index": 4,
+      "source": "b0cf8ad21dc72a7ffface2b3a9ce5e7138b7eaf9",
+      "subject": "chore(release): version 0.152.4 (#2500)",
+      "changed_paths": [
+        "CHANGELOG.md",
+        "lintro/__init__.py",
+        "pyproject.toml",
+        "uv.lock"
+      ]
+    },
+    {
+      "repo": "py-lintro",
+      "source_index": 5,
+      "source": "5d5572a22cecd58f2417057299f380b06871b56a",
+      "subject": "ci: allow the hosted-compute watchdog hosts on the linux binary job (#2487)",
+      "changed_paths": [
+        ".github/workflows/build-binary.yml",
+        "tests/unit/test_workflow_wiring.py"
+      ]
+    }
+  ]
+}

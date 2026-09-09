@@ -1,0 +1,1707 @@
+[
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "cold",
+    "cohort": "main",
+    "run_id": 34350862282,
+    "job_id": 102463534562,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34350862282/job/102463534562",
+    "source": "e8773c533caff41403dc40f37eee608c20143f01",
+    "source_index": 0,
+    "workflow_commit": "ba77483d363b1b9184774a7267f72d3cbbc06343",
+    "conclusion": "success",
+    "started_at": "2026-09-09T12:24:58Z",
+    "completed_at": "2026-09-09T12:59:17Z",
+    "job_seconds": 2059.0,
+    "build_seconds": 2028.578,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 2033.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34350862282/artifacts/BoringCache-nuitka-cold",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.26,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.248,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache miss": 1515
+    },
+    "cache_directory_bytes": 88281088,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34350862282/artifacts/BoringCache-nuitka-cold/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-90df7e7b574ea1078d929fbf7f4d2a19f148d5c33622f8033f46409f1ca5453e.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "cold",
+    "cohort": "main",
+    "run_id": 34350862282,
+    "job_id": 102463534650,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34350862282/job/102463534650",
+    "source": "e8773c533caff41403dc40f37eee608c20143f01",
+    "source_index": 0,
+    "workflow_commit": "ba77483d363b1b9184774a7267f72d3cbbc06343",
+    "conclusion": "success",
+    "started_at": "2026-09-09T12:24:59Z",
+    "completed_at": "2026-09-09T12:57:15Z",
+    "job_seconds": 1936.0,
+    "build_seconds": 1903.405,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 1908.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34350862282/artifacts/GitHub-nuitka-cold",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.226,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.534,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache miss": 1515
+    },
+    "cache_directory_bytes": 88281088,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "warm",
+    "cohort": "main",
+    "run_id": 34350862282,
+    "job_id": 102474824868,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34350862282/job/102474824868",
+    "source": "e8773c533caff41403dc40f37eee608c20143f01",
+    "source_index": 0,
+    "workflow_commit": "ba77483d363b1b9184774a7267f72d3cbbc06343",
+    "conclusion": "success",
+    "started_at": "2026-09-09T12:59:26Z",
+    "completed_at": "2026-09-09T13:09:13Z",
+    "job_seconds": 587.0,
+    "build_seconds": 539.758,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Require the seeded GitHub cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 551.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 4.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34350862282/artifacts/GitHub-nuitka-warm",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.668,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 6.129,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1513,
+      "cache miss": 2
+    },
+    "cache_directory_bytes": 89559040,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "warm",
+    "cohort": "main",
+    "run_id": 34350862282,
+    "job_id": 102474824937,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34350862282/job/102474824937",
+    "source": "e8773c533caff41403dc40f37eee608c20143f01",
+    "source_index": 0,
+    "workflow_commit": "ba77483d363b1b9184774a7267f72d3cbbc06343",
+    "conclusion": "success",
+    "started_at": "2026-09-09T12:59:24Z",
+    "completed_at": "2026-09-09T13:07:33Z",
+    "job_seconds": 489.0,
+    "build_seconds": 438.119,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Require the seeded GitHub cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 21.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 444.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34350862282/artifacts/BoringCache-nuitka-warm",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.868,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.656,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1513,
+      "cache miss": 2
+    },
+    "cache_directory_bytes": 89559040,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34350862282/artifacts/BoringCache-nuitka-warm/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-96a737d21aa2adb01ad9c8c30aee2ef5533bc075e3e2d703d2dbae57c9a98fc3.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34355317864,
+    "job_id": 102478389451,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34355317864/job/102478389451",
+    "source": "cbe03f587f897109b0fd8bea765118bab176024c",
+    "source_index": 1,
+    "workflow_commit": "4fa0203f77a2d5df1ee6ad39fa9dfef767a87f81",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:09:39Z",
+    "completed_at": "2026-09-09T13:17:40Z",
+    "job_seconds": 481.0,
+    "build_seconds": 442.972,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 448.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34355317864/artifacts/GitHub-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.643,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.27,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1512,
+      "cache miss": 3
+    },
+    "cache_directory_bytes": 89620480,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34355317864,
+    "job_id": 102478390189,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34355317864/job/102478390189",
+    "source": "cbe03f587f897109b0fd8bea765118bab176024c",
+    "source_index": 1,
+    "workflow_commit": "4fa0203f77a2d5df1ee6ad39fa9dfef767a87f81",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:09:38Z",
+    "completed_at": "2026-09-09T13:17:06Z",
+    "job_seconds": 448.0,
+    "build_seconds": 404.003,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 409.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 10.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34355317864/artifacts/BoringCache-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.451,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.09,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1512,
+      "cache miss": 3
+    },
+    "cache_directory_bytes": 89620480,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34355317864/artifacts/BoringCache-nuitka-commit/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-324b03d47351878995910dabb4a19e2deff57f4a9ffa9d80e300ec1168153175.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34356186799,
+    "job_id": 102481345011,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34356186799/job/102481345011",
+    "source": "af2d97bfde1f075f0cb05c88a45068d3fac12c8d",
+    "source_index": 2,
+    "workflow_commit": "7f8cf2e4ca2f055abaa35eadc9866fd7aef8d3d0",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:18:00Z",
+    "completed_at": "2026-09-09T13:25:01Z",
+    "job_seconds": 421.0,
+    "build_seconds": 383.952,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 391.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34356186799/artifacts/GitHub-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.207,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.26,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1514,
+      "cache miss": 1
+    },
+    "cache_directory_bytes": 89755648,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34356186799,
+    "job_id": 102481345337,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34356186799/job/102481345337",
+    "source": "af2d97bfde1f075f0cb05c88a45068d3fac12c8d",
+    "source_index": 2,
+    "workflow_commit": "7f8cf2e4ca2f055abaa35eadc9866fd7aef8d3d0",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:18:01Z",
+    "completed_at": "2026-09-09T13:27:11Z",
+    "job_seconds": 550.0,
+    "build_seconds": 487.39,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 17.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 498.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 5.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34356186799/artifacts/BoringCache-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.756,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 5.225,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1514,
+      "cache miss": 1
+    },
+    "cache_directory_bytes": 89755648,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34356186799/artifacts/BoringCache-nuitka-commit/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-99ec919c3a09216a28c276d5c9f32231bc56bebc71d4bd206defdc394654a554.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34357219189,
+    "job_id": 102484847123,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34357219189/job/102484847123",
+    "source": "e8d2293ad2509d5b647077fcaf7fa3609ad9705f",
+    "source_index": 3,
+    "workflow_commit": "97c2a769b3f6e18b0655bbde511636132045a436",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:27:54Z",
+    "completed_at": "2026-09-09T13:35:09Z",
+    "job_seconds": 435.0,
+    "build_seconds": 391.109,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 8.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 396.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34357219189/artifacts/BoringCache-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.709,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.994,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1514,
+      "cache miss": 1
+    },
+    "cache_directory_bytes": 89890816,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34357219189/artifacts/BoringCache-nuitka-commit/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-ac235487c6e84128dd48bda39708f214858337bc28f3278c31708163dee93d92.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34357219189,
+    "job_id": 102484847473,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34357219189/job/102484847473",
+    "source": "e8d2293ad2509d5b647077fcaf7fa3609ad9705f",
+    "source_index": 3,
+    "workflow_commit": "97c2a769b3f6e18b0655bbde511636132045a436",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:27:52Z",
+    "completed_at": "2026-09-09T13:33:33Z",
+    "job_seconds": 341.0,
+    "build_seconds": 313.342,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 318.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34357219189/artifacts/GitHub-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.312,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.298,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1514,
+      "cache miss": 1
+    },
+    "cache_directory_bytes": 89890816,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34358048705,
+    "job_id": 102487631697,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34358048705/job/102487631697",
+    "source": "b0cf8ad21dc72a7ffface2b3a9ce5e7138b7eaf9",
+    "source_index": 4,
+    "workflow_commit": "a14938bcc3065e15c54a369d8819c9a8e19ffe5f",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:35:35Z",
+    "completed_at": "2026-09-09T13:42:24Z",
+    "job_seconds": 409.0,
+    "build_seconds": 370.99,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 8.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 374.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 4.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 8.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34358048705/artifacts/GitHub-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.082,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.076,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1513,
+      "cache miss": 2
+    },
+    "cache_directory_bytes": 90054656,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34358048705,
+    "job_id": 102487632012,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34358048705/job/102487632012",
+    "source": "b0cf8ad21dc72a7ffface2b3a9ce5e7138b7eaf9",
+    "source_index": 4,
+    "workflow_commit": "a14938bcc3065e15c54a369d8819c9a8e19ffe5f",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:35:37Z",
+    "completed_at": "2026-09-09T13:44:20Z",
+    "job_seconds": 523.0,
+    "build_seconds": 450.034,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 35.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 456.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34358048705/artifacts/BoringCache-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.916,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.21,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1513,
+      "cache miss": 2
+    },
+    "cache_directory_bytes": 90054656,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34358048705/artifacts/BoringCache-nuitka-commit/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-c5a8cb7e0cbbc4c01ac3983a5d5560b09f5e8549fd13145d712ea9c4605def72.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "GitHub",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34359061982,
+    "job_id": 102491064878,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34359061982/job/102491064878",
+    "source": "5d5572a22cecd58f2417057299f380b06871b56a",
+    "source_index": 5,
+    "workflow_commit": "c329e7df433970c761122cd8637aec48a624bfcc",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:44:58Z",
+    "completed_at": "2026-09-09T13:53:04Z",
+    "job_seconds": 486.0,
+    "build_seconds": 448.83,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 2.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 455.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "success",
+        "seconds": 5.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34359061982/artifacts/GitHub-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.758,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 3.225,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1514,
+      "cache miss": 1
+    },
+    "cache_directory_bytes": 90189824,
+    "nextest_summary": [],
+    "product_evidence_files": [],
+    "cli_versions": []
+  },
+  {
+    "repo": "py-lintro",
+    "provider": "BoringCache",
+    "case": "nuitka",
+    "phase": "commit",
+    "cohort": "rolling",
+    "run_id": 34359061982,
+    "job_id": 102491065291,
+    "job_url": "https://github.com/boringcache/py-lintro/actions/runs/34359061982/job/102491065291",
+    "source": "5d5572a22cecd58f2417057299f380b06871b56a",
+    "source_index": 5,
+    "workflow_commit": "c329e7df433970c761122cd8637aec48a624bfcc",
+    "conclusion": "success",
+    "started_at": "2026-09-09T13:45:01Z",
+    "completed_at": "2026-09-09T13:52:49Z",
+    "job_seconds": 468.0,
+    "build_seconds": 380.401,
+    "build_exit_code": 0,
+    "build_command": [
+      "uv",
+      "run",
+      "--no-default-groups",
+      "python",
+      "scripts/build/build_macos.py",
+      "--arch",
+      "arm64",
+      "--skip-verify"
+    ],
+    "cargo_compile_seconds": [],
+    "steps": {
+      "Set up job": {
+        "conclusion": "success",
+        "seconds": 3.0
+      },
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 7.0
+      },
+      "Record and verify the upstream source": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Install the locked binary build dependencies": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Restore GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 55.0
+      },
+      "Run the upstream workload": {
+        "conclusion": "success",
+        "seconds": 385.0
+      },
+      "Save GitHub Nuitka cache": {
+        "conclusion": "skipped",
+        "seconds": 0.0
+      },
+      "Retain measurements and product evidence": {
+        "conclusion": "success",
+        "seconds": 1.0
+      },
+      "Post Configure BoringCache": {
+        "conclusion": "success",
+        "seconds": 6.0
+      },
+      "Post Run astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+        "conclusion": "success",
+        "seconds": 0.0
+      },
+      "Complete job": {
+        "conclusion": "success",
+        "seconds": 2.0
+      }
+    },
+    "evidence_directory": "evidence/py-lintro/34359061982/artifacts/BoringCache-nuitka-commit",
+    "verify": {
+      "command": [
+        "scripts/build/verify_built_binary.sh",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 1.913,
+      "exit_code": 0
+    },
+    "smoke": {
+      "command": [
+        "python3",
+        "scripts/ci/smoke-test-binary.py",
+        "dist/nuitka/lintro"
+      ],
+      "elapsed_seconds": 2.566,
+      "exit_code": 0
+    },
+    "nuitka_ccache_counts": {
+      "cache hit": 1515
+    },
+    "cache_directory_bytes": 90054656,
+    "nextest_summary": [],
+    "product_evidence_files": [
+      "evidence/py-lintro/34359061982/artifacts/BoringCache-nuitka-commit/var/folders/bl/vzjcvbz95c3dk19cb0fw46180000gn/T/boringcache-one-evidence-5f6ccaad5af84fbef4cfa5e182b9f90da4d7c66c985f31f97a863b1857a4b034.json"
+    ],
+    "cli_versions": [
+      "v1.30.1"
+    ]
+  }
+]
