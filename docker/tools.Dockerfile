@@ -66,6 +66,23 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+ARG SCCACHE_VERSION=0.17.0
+RUN set -eu; \
+    case "$(uname -m)" in \
+        x86_64) checksum=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006 ;; \
+        aarch64) checksum=821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77 ;; \
+        *) echo "Unsupported build architecture"; exit 1 ;; \
+    esac; \
+    archive="sccache-v${SCCACHE_VERSION}-$(uname -m)-unknown-linux-musl"; \
+    curl --fail --location --silent --show-error \
+        "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${archive}.tar.gz" \
+        --output /tmp/sccache.tar.gz; \
+    printf '%s  /tmp/sccache.tar.gz\n' "$checksum" | sha256sum --check -; \
+    tar -xzf /tmp/sccache.tar.gz -C /tmp; \
+    install -m 755 "/tmp/${archive}/sccache" /usr/local/bin/sccache; \
+    rm -rf /tmp/sccache.tar.gz "/tmp/${archive}"; \
+    sccache --version
+
 # hadolint ignore=DL3003,SC2086
 RUN --mount=type=cache,target=/root/.cache/bun,sharing=locked \
     ARCH=$(uname -m) && \
