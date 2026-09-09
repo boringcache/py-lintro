@@ -9,7 +9,7 @@ entries = ["nuitka"]
 
 [adapters.docker]
 tag = "docker-tools"
-command = ["docker", "buildx", "build", "--file", "docker/tools.Dockerfile", "--platform", "linux/amd64", "--load", "--tag", "lintro-tools:validation", "--metadata-file", "/tmp/docker-validation-metadata.json", "."]
+command = ["docker", "buildx", "bake", "--file", ".github/boringcache-tools.hcl", "--metadata-file", "/tmp/docker-validation-metadata.json"]
 mount-cache = true
 tool-cache = ["sccache:rust-docker-tools"]
 fail-on-cache-error = true

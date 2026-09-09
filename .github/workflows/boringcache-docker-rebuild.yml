@@ -1,0 +1,58 @@
+name: BoringCache Docker rebuild diagnostic
+'on':
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: boringcache-docker-rebuild
+  cancel-in-progress: false
+jobs:
+  rebuild:
+    name: Rebuild tools using compiler and mount caches
+    if: github.repository_owner == 'boringcache' && github.ref == 'refs/heads/boringcache-validation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Record source identity
+      run: |
+        mkdir -p "$RUNNER_TEMP/docker-validation"
+        git rev-parse HEAD > "$RUNNER_TEMP/docker-validation/workflow-commit.txt"
+        cp .github/boringcache-source "$RUNNER_TEMP/docker-validation/upstream-commit.txt"
+        cp .boringcache.toml "$RUNNER_TEMP/docker-validation/cache-plan.toml"
+        git status --porcelain > "$RUNNER_TEMP/docker-validation/checkout.txt"
+        test ! -s "$RUNNER_TEMP/docker-validation/checkout.txt"
+        df -h .
+    - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+      with:
+        driver: docker
+    - name: Rebuild with Docker layers bypassed
+      id: docker
+      uses: boringcache/one@404b744a2053da4cf963f13f615f7fafe94f3cf7 # v1.30.1
+      with:
+        mode: docker
+        trust-policy: restore
+        fail-on-cache-error: true
+    - name: Verify loaded tools image
+      run: |
+        docker run --rm lintro-tools:validation bash -euc 'bun --version; cargo --version; rustc --version; sccache --version; cargo audit --version; cargo deny --version; typos --version; taplo --version'
+        docker image inspect lintro-tools:validation --format '{{.Id}} {{.Size}}' > "$RUNNER_TEMP/docker-validation/image.txt"
+        cp /tmp/docker-validation-metadata.json "$RUNNER_TEMP/docker-validation/metadata.json"
+    - name: Retain Docker evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: docker-tools-rebuild
+        path: |
+          ${{ runner.temp }}/docker-validation
+          ${{ steps.docker.outputs.evidence-path }}
+        if-no-files-found: error
+        retention-days: 30
+    env:
+      REBUILD_TOOLS: 'true'
