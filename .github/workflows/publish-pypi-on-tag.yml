@@ -229,6 +229,11 @@ jobs:
       # updates are dispatched to the tap (repository_dispatch), not pushed
       # from here — this token has no write access to lgtm-hq/homebrew-tap.
       contents: write
+      # read: build-binary.yml's build jobs list and download this run's own
+      # sha256 artifacts for the release-asset reuse check (#2435). A called
+      # workflow may not request more than its caller grants, so omitting this
+      # fails the whole run at startup with no logs (v0.151.2 through v0.152.1).
+      actions: read
     with:
       release_tag: ${{ github.ref_name }}
       arch: universal
