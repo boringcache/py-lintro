@@ -26,7 +26,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - **plugins**: `VerifyMode.ALWAYS` (`lintro.tools.core.fix_runner`). Since the run-level
   verify pass measures the residual once after every mutating tool has run, a per-file
-  re-lint after a _failed_ fix could only report an earlier, less accurate number.
+  re-lint after a failed fix could only report an earlier, less accurate number.
   Out-of-tree plugins using it should declare `VerifyMode.AFTER_SUCCESS`.
 
 ### Fixed
